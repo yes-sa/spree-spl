@@ -36,7 +36,7 @@ module Spl
         {
           context: {
             prgCode: @store.private_metadata['spl_prg_code'],
-            oauthToken: @user&.private_metadata['spl_access_token']
+            oauthToken: @user&.private_metadata&.[]('spl_access_token')
           },
           withArchival: true
         }
