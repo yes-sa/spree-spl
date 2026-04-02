@@ -16,7 +16,7 @@ module Spl
       end
 
       def call
-        return unless satisfied_preconditions?(@user.private_metadata)
+        return unless satisfied_preconditions?(@user&.private_metadata)
 
         response = send_request(@activate_coupons_url, body)
         response_body = JSON.parse(response.body)
