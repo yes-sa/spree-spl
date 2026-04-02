@@ -8,6 +8,8 @@ module ErrorHandlingHelper
     payload = Spl::ErrorPayloadParser.parse(error.message) || error
     msg = Spl::ErrorTranslator.translate(payload)
 
+    return unless model
+    
     clear_errors(model)
     model.errors.add(:base, msg)
   end

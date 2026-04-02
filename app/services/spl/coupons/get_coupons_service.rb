@@ -15,7 +15,7 @@ module Spl
       end
 
       def call
-        return unless satisfied_preconditions?(@user.private_metadata)
+        return unless satisfied_preconditions?(@user&.private_metadata)
 
         response = send_request(@find_coupons_url, body)
         response_body = JSON.parse(response.body)
@@ -36,7 +36,7 @@ module Spl
         {
           context: {
             prgCode: @store.private_metadata['spl_prg_code'],
-            oauthToken: @user.private_metadata['spl_access_token']
+            oauthToken: @user&.private_metadata['spl_access_token']
           },
           withArchival: true
         }
