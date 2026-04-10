@@ -56,7 +56,7 @@ module Spl
             AssignSpartaCardNumberService.new(user, store).call
           end
 
-          def validate_spl_no_card # rubocop:disable Metrics/AbcSize
+          def validate_spl_no_card
             return if permitted_params[:metadata].blank?
             return if disactivated_card?
             return if permitted_params.dig(:metadata, :spl_no_card).blank?
