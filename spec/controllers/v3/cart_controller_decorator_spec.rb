@@ -2,7 +2,9 @@
 
 require 'rails_helper'
 
-RSpec.describe Spree::Api::V2::Storefront::CartController, type: :controller do
+return unless defined?(Spree::Api::V3::Store::CartsController)
+
+RSpec.describe Spree::Api::V3::Store::CartsController, type: :controller do
   let(:store) { Spree::Store.default || create(:store, default: true) }
   let(:user)  { create(:user, public_metadata: user_metadata) }
   let(:order) { create(:order, user: user, store: store, public_metadata: {}) }
@@ -11,8 +13,12 @@ RSpec.describe Spree::Api::V2::Storefront::CartController, type: :controller do
 
   before do
     allow(controller).to receive(:current_store).and_return(store)
-    allow(controller).to receive(:spree_current_user).and_return(user)
-    allow(controller).to receive(:spree_current_order).and_return(order)
+    allow(controller).to receive(:current_user).and_return(user)
+    allow(controller).to receive(:find_cart).and_return(order)
+    allow(controller).to receive(:find_cart!).and_return(order)
+    allow(controller).to receive(:authenticate_user).and_return(true)
+    allow(controller).to receive(:authenticate_api_key!).and_return(true)
+    controller.instance_variable_set(:@cart, order)
     allow(PromotionSwitcherService).to receive_message_chain(:new, :call)
   end
 
