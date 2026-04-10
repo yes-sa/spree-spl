@@ -2,13 +2,15 @@
 
 require 'rails_helper'
 
-RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller do
+RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
   let(:store) { Spree::Store.default || create(:store, default: true) }
   let(:user)  { create(:user) }
 
   before do
-    allow(controller).to receive(:spree_current_user).and_return(user)
+    allow(controller).to receive(:current_user).and_return(user)
     allow(controller).to receive(:current_store).and_return(store)
+    allow(controller).to receive(:authenticate_user).and_return(true)
+    allow(controller).to receive(:authenticate_api_key!).and_return(true)
   end
 
   describe 'POST #connect_loyalty_account' do
@@ -33,7 +35,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
       end
 
       it 'authorizes the action' do
-        expect(controller).to receive(:spree_authorize!).with(:update, user)
+        expect(controller).to receive(:authorize!).with(:update, user)
 
         post :connect_loyalty_account,
              params: params,
@@ -50,7 +52,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
         expect(response).to have_http_status(:ok)
 
         json = response.parsed_body
-        expect(json).to have_key('data')
+        expect(json).to have_key('id')
       end
     end
 
@@ -113,7 +115,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
     end
 
     before do
-      allow(controller).to receive(:spree_current_user).and_return(user)
+      allow(controller).to receive(:current_user).and_return(user)
       allow(controller).to receive(:current_store).and_return(store)
 
       allow(Spl::RegisterAccountService)
@@ -128,7 +130,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
       end
 
       it 'authorizes the user' do
-        expect(controller).to receive(:spree_authorize!).with(:update, user)
+        expect(controller).to receive(:authorize!).with(:update, user)
 
         post :register_loyalty_account, params: params, format: :json
       end
@@ -147,8 +149,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
         expect(response).to have_http_status(:ok)
 
         json = response.parsed_body
-        expect(json).to have_key('data')
-        expect(json['data']).to have_key('attributes')
+        expect(json).to have_key('id')
       end
     end
 
@@ -255,7 +256,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
     let(:service_instance) { instance_double(Spl::SendOtpService) }
 
     before do
-      allow(controller).to receive(:spree_current_user).and_return(user)
+      allow(controller).to receive(:current_user).and_return(user)
       allow(controller).to receive(:current_store).and_return(store)
 
       allow(Spl::SendOtpService)
@@ -271,7 +272,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
 
     context 'when authorization passes' do
       before do
-        allow(controller).to receive(:spree_authorize!)
+        allow(controller).to receive(:authorize!)
           .with(:update, user)
           .and_return(true)
 
@@ -289,7 +290,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
 
     context 'when authorization fails' do
       before do
-        allow(controller).to receive(:spree_authorize!)
+        allow(controller).to receive(:authorize!)
           .with(:update, user)
           .and_raise(CanCan::AccessDenied.new('Not allowed'))
       end
@@ -302,7 +303,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
 
     context 'when SplSendOtpError is raised' do
       before do
-        allow(controller).to receive(:spree_authorize!).and_return(true)
+        allow(controller).to receive(:authorize!).and_return(true)
         allow(service_instance).to receive(:call)
           .and_raise(Spl::SendOtpService::SplSendOtpError.new('OTP sending failed'))
       end
@@ -324,10 +325,10 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
     end
     let(:service) { instance_double(Spl::ValidateCardService, call: true) }
 
-    it 'does nothing when public_metadata is missing' do
+    it 'does nothing when metadata is missing' do
       expect(Spl::ValidateCardService).not_to receive(:new)
 
-      patch :update, params: { user: { public_metadata: {} } }, as: :json
+      patch :update, params: { metadata: {} }, as: :json
       expect(response).not_to have_http_status(:bad_request)
     end
 
@@ -335,7 +336,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
       expect(Spl::ValidateCardService).not_to receive(:new)
 
       patch :update,
-            params: { user: { public_metadata: { spl_card_active: false, spl_no_card: '0123456789123' } } },
+            params: { metadata: { spl_card_active: false, spl_no_card: '0123456789123' } },
             as: :json
 
       expect(response).not_to have_http_status(:bad_request)
@@ -345,7 +346,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
       expect(Spl::ValidateCardService).not_to receive(:new)
 
       patch :update,
-            params: { user: { public_metadata: { spl_card_active: false, spl_no_card: '' } } },
+            params: { metadata: { spl_card_active: false, spl_no_card: '' } },
             as: :json
 
       expect(response).not_to have_http_status(:bad_request)
@@ -358,7 +359,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
       expect(service).to receive(:call)
 
       patch :update,
-            params: { user: { public_metadata: { spl_no_card: '0123456789123' } } },
+            params: { metadata: { spl_no_card: '0123456789123' } },
             as: :json
 
       expect(response).to have_http_status(:ok)
@@ -373,7 +374,7 @@ RSpec.describe Spree::Api::V2::Storefront::AccountController, type: :controller 
       )
 
       patch :update,
-            params: { user: { public_metadata: { spl_no_card: 'BAD' } } },
+            params: { metadata: { spl_no_card: 'BAD' } },
             as: :json
 
       expect(response).to have_http_status(:bad_request)
