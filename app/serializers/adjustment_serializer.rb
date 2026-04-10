@@ -8,5 +8,5 @@ if defined?(Spree::V2::Storefront::BaseSerializer)
   end
 else
   # Spree 5.4+ — V2 serializer is not used, define empty class to avoid NameError
-  class AdjustmentSerializer; end
+  class AdjustmentSerializer; end # rubocop:disable Lint/EmptyClass
 end
