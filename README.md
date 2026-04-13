@@ -5,8 +5,12 @@
 ## Compatibility
 ### Versions <= 1.7.x
 Are compatible with Spree ~> 4.x and Rails <= 7.2
-### Versions > 1.7 (current master branch, check current state)
-Is compatible with Spree ~> 5.2, and Rails >= 7.0, < 8.3
+### Versions 2.x
+Are compatible with Spree ~> 5.0–5.3 (API v2) and Rails >= 7.0, < 8.3
+### Versions 3.x
+Are compatible with Spree ~> 5.4+ (API v3) and Rails >= 7.0, < 8.3
+
+Spree 5.4 replaced the Storefront API v2 (`Spree::Api::V2::Storefront::*`) with API v3 (`Spree::Api::V3::Store::*`). Version 3.x adds v3-compatible controller decorators, serializers, and routes. The v3 decorators are loaded automatically when Spree 5.4+ is detected.
 ## Installation
 
 Add spree-spl to your Gemfile and run bundle install:
