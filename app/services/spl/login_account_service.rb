@@ -63,9 +63,9 @@ module Spl
     def add_loyalty_tokens_to_user(access_token, refresh_token)
       @user.private_metadata ||= {} if @user.private_metadata.blank?
       @user.update!(private_metadata: @user.private_metadata.merge(
-                      spl_access_token: access_token,
-                      spl_refresh_token: refresh_token
-                    ))
+        spl_access_token: access_token,
+        spl_refresh_token: refresh_token
+      ))
     end
   end
 end
