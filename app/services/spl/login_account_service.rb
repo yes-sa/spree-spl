@@ -7,7 +7,7 @@ module Spl
     class SplLoginAccountError < StandardError; end
     include SplServiceHelper
 
-    def initialize(user, store, params)
+    def initialize(user, store, params, raw_otp: false)
       @login_url = URI.parse(Spl::UrlCreatorService.new(store.private_metadata['spl_url']).login)
       @user = user
       @store = store
@@ -15,6 +15,7 @@ module Spl
       @card_number = params.dig('user', 'card_number')
       @otp_code = params.dig('user', 'spl_auth_code')
       @env = Spl::StorePrivateMetadataService.all(store)
+      @raw_otp = raw_otp
     end
 
     def call
@@ -45,14 +46,13 @@ module Spl
     end
 
     def encrypted_otp
+      return @otp_code if @raw_otp
+
       @otp_code.length == 6 ? Digest::SHA256.hexdigest(@otp_code) : @otp_code
     end
 
     def generate_login
-      login = @phone_number if @card_number.nil?
-      login = @card_number if @phone_number.nil?
-
-      login
+      @card_number.presence || @phone_number.presence
     end
 
     def get_access_token(access_token)
@@ -61,8 +61,11 @@ module Spl
     end
 
     def add_loyalty_tokens_to_user(access_token, refresh_token)
-      @user.update!(private_metadata: { spl_access_token: access_token,
-                                        spl_refresh_token: refresh_token })
+      @user.private_metadata ||= {} if @user.private_metadata.blank?
+      @user.update!(private_metadata: @user.private_metadata.merge(
+                      spl_access_token: access_token,
+                      spl_refresh_token: refresh_token
+                    ))
     end
   end
 end

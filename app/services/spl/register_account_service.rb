@@ -27,6 +27,16 @@ module Spl
 
       spl_card = register_response_body.dig('response', 'cardNo')
       update_account(spl_card, oauth_response_body)
+
+      if (otp_token = register_response_body.dig('response', 'otpLoginToken')).present?
+        # Trigger an internal login to upgrade the session immediately
+        Spl::LoginAccountService.new(
+          @user,
+          @store,
+          { 'user' => { 'spl_auth_code' => otp_token, 'card_number' => spl_card } },
+          raw_otp: true
+        ).call
+      end
     end
 
     private
