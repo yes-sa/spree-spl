@@ -151,5 +151,31 @@ RSpec.describe Spl::LoginAccountService, type: :service do
         service.call
       end
     end
+
+    context 'when raw_otp option is true' do
+      subject(:service) { described_class.new(user, store, params, raw_otp: true) }
+
+      it 'uses OTP as-is without hashing even if length is 6' do
+        expect(Spl::SendRequestService).to receive(:new) do |_url, body|
+          expect(body[:password]).to eq(otp_code)
+          send_request_service
+        end
+
+        service.call
+      end
+    end
+
+    context 'when both card number and phone number are present' do
+      let(:card_number) { '1234567890123' }
+
+      it 'prioritizes card number over phone number' do
+        expect(Spl::SendRequestService).to receive(:new) do |_url, body|
+          expect(body[:login]).to eq(card_number)
+          send_request_service
+        end
+
+        service.call
+      end
+    end
   end
 end
