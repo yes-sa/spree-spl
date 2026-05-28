@@ -125,5 +125,33 @@ RSpec.describe Spl::RegisterAccountService do
         expect { service.call }.to raise_error(StandardError)
       end
     end
+
+    context 'when registration response contains otpLoginToken' do
+      let(:register_response_body) do
+        {
+          'errorCode' => '0',
+          'response' => {
+            'cardNo' => 'CARD123',
+            'otpLoginToken' => 'TOKEN_ABC_123'
+          }
+        }
+      end
+      let(:login_service) { instance_double(Spl::LoginAccountService) }
+
+      before do
+        allow(Spl::LoginAccountService).to receive(:new).with(
+          user,
+          store,
+          { 'user' => { 'spl_auth_code' => 'TOKEN_ABC_123', 'card_number' => 'CARD123' } },
+          raw_otp: true
+        ).and_return(login_service)
+        allow(login_service).to receive(:call)
+      end
+
+      it 'triggers LoginAccountService with raw_otp option to automatically upgrade session' do
+        expect(login_service).to receive(:call).once
+        service.call
+      end
+    end
   end
 end
