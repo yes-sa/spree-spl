@@ -27,9 +27,22 @@ module Spl
 
       spl_card = register_response_body.dig('response', 'cardNo')
       update_account(spl_card, oauth_response_body)
+      upgrade_session_if_needed(register_response_body, spl_card)
     end
 
     private
+
+    def upgrade_session_if_needed(register_response_body, spl_card)
+      return if (otp_token = register_response_body.dig('response', 'otpLoginToken')).blank?
+
+      # Trigger an internal login to upgrade the session immediately
+      Spl::LoginAccountService.new(
+        @user,
+        @store,
+        { 'user' => { 'spl_auth_code' => otp_token, 'card_number' => spl_card } },
+        raw_otp: true
+      ).call
+    end
 
     def prepare_registration_body(access_token) # rubocop:disable Metrics/MethodLength
       accept_yc_terms = @user.public_metadata['accept_yc_terms']
