@@ -24,7 +24,7 @@ module Spl
 
         def connect_loyalty_account
           assign_card_number(try_spree_current_user, current_store, params)
-          redirect_to (params[:redirect_to].presence || spree.edit_account_profile_path),
+          redirect_to safe_redirect_url(params[:redirect_to], spree.edit_account_profile_path),
                       notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
         rescue Spl::LoginAccountService::SplLoginAccountError, AssignSpartaCardNumberService::AssignSpartaCardNumberError,
                Spl::MeService::SplMeError => e
@@ -51,7 +51,7 @@ module Spl
 
           if user.private_metadata&.fetch('spl_access_token', nil).present?
             # Session upgrade succeeded — user has valid tokens
-            redirect_to (params[:redirect_to].presence || spree.edit_account_profile_path),
+            redirect_to safe_redirect_url(params[:redirect_to], spree.edit_account_profile_path),
                         notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
           else
             # Registration succeeded but session upgrade failed (no otpLoginToken or login failed).
@@ -85,7 +85,7 @@ module Spl
                 Rails.cache.delete("user_#{user.id}_spl_data")
                 Rails.cache.delete("user_#{user.id}_spl_coupons")
 
-                redirect_to (params[:redirect_to].presence || spree.edit_account_profile_path),
+                redirect_to safe_redirect_url(params[:redirect_to], spree.edit_account_profile_path),
                             notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
                 return
               rescue StandardError => connect_error
@@ -217,6 +217,18 @@ module Spl
         def user_params
           params.require(:user).permit(:first_name, :last_name, :phone, :email,
                                        public_metadata: %i[spl_card_active spl_no_card])
+        end
+
+        def safe_redirect_url(redirect_param, default_path)
+          return default_path if redirect_param.blank?
+          
+          uri = URI.parse(redirect_param)
+          # Only allow relative URLs or same-host URLs
+          return redirect_param if uri.relative? || uri.host == request.host
+          
+          default_path
+        rescue URI::InvalidURIError
+          default_path
         end
       end
     end

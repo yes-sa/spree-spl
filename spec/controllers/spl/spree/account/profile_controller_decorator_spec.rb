@@ -424,7 +424,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
   end
 
   describe '#connect_loyalty_account with redirect_to param' do
-    let(:service_params) { { user: { spl_auth_code: '123456' }, redirect_to: 'http://localhost:3000/cart' } }
+    let(:service_params) { { user: { spl_auth_code: '123456' }, redirect_to: '/cart' } }
 
     before do
       allow(controller).to receive(:params).and_return(service_params)
@@ -441,7 +441,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
       allow(assign_service).to receive(:call)
 
       expect(controller).to receive(:redirect_to).with(
-        'http://localhost:3000/cart',
+        '/cart',
         hash_including(notice: Spree.t(:successfully_updated, resource: Spree.t(:account)))
       )
 
