@@ -24,7 +24,7 @@ module Spl
 
         def connect_loyalty_account
           assign_card_number(try_spree_current_user, current_store, params)
-          redirect_to spree.edit_account_profile_path,
+          redirect_to (params[:redirect_to].presence || spree.edit_account_profile_path),
                       notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
         rescue Spl::LoginAccountService::SplLoginAccountError, AssignSpartaCardNumberService::AssignSpartaCardNumberError,
                Spl::MeService::SplMeError => e
@@ -42,12 +42,80 @@ module Spl
         end
 
         def register_loyalty_account
-          Spl::RegisterAccountService.new(try_spree_current_user, current_store, params['user']['spl_auth_code']).call
-          redirect_to spree.edit_account_profile_path,
-                      notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
-        rescue Spl::RegisterAccountService::SplRegisterAccountError, Spl::OauthTokenService::OauthTokenError => e
-          handle_spl_error(e, try_spree_current_user)
           user = try_spree_current_user
+          Spl::RegisterAccountService.new(user, current_store, params.dig('user', 'spl_auth_code')).call
+          
+          user.reload
+          Rails.cache.delete("user_#{user.id}_spl_data")
+          Rails.cache.delete("user_#{user.id}_spl_coupons")
+
+          if user.private_metadata&.fetch('spl_access_token', nil).present?
+            # Session upgrade succeeded — user has valid tokens
+            redirect_to (params[:redirect_to].presence || spree.edit_account_profile_path),
+                        notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
+          else
+            # Registration succeeded but session upgrade failed (no otpLoginToken or login failed).
+            # Send a login OTP so the user can complete the connection.
+            phone = PhoneParserService.new(user.phone)
+            Spl::SendOtpService.new(DateTime.current, phone.country_code, phone.national_number, current_store).call
+            user.errors.add(:base, I18n.t('spl.user.registration_success_enter_login_code',
+                                          default: 'Rejestracja zakończona pomyślnie. Wpisz kod, który wysłaliśmy SMS-em, aby połączyć konto.'))
+            # Render otp_code_form (posts to connect_loyalty_account) targeting
+            # otp_registration_form (the element currently in the DOM).
+            render turbo_stream: turbo_stream.replace(
+              'otp_registration_form',
+              partial: 'spl/otp_code_form',
+              locals: { user: user, phone_e164: phone.e164 }
+            ), status: :unprocessable_content
+          end
+        rescue Spl::RegisterAccountService::SplRegisterAccountError => e
+          user = try_spree_current_user
+          parsed_error = ::Spl::ErrorPayloadParser.parse(e.message) || {}
+          
+          if parsed_error.is_a?(Hash)
+            error_code = parsed_error['errorCode']
+            
+            if error_code == 'PERSON_MOBILE_ALREADY_EXISTS' || error_code == 'PERSON_EMAIL_ALREADY_EXISTS'
+              begin
+                # Reuse the OTP the user already submitted to log in and assign their existing card
+                Spl::LoginAccountService.new(user, current_store, params).call
+                AssignSpartaCardNumberService.new(user, current_store).call
+
+                user.reload
+                Rails.cache.delete("user_#{user.id}_spl_data")
+                Rails.cache.delete("user_#{user.id}_spl_coupons")
+
+                redirect_to (params[:redirect_to].presence || spree.edit_account_profile_path),
+                            notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
+                return
+              rescue StandardError => connect_error
+                Rails.logger.error("[SPL] Auto-connect after PERSON_EXISTS failed: #{connect_error.class}: #{connect_error.message}")
+                # Auto-connect failed (likely because the OTP was single-use).
+                # Send a new SMS and show the login form as the translation promises.
+                phone = PhoneParserService.new(user.phone)
+                begin
+                  Spl::SendOtpService.new(DateTime.current, phone.country_code, phone.national_number, current_store).call
+                  error_key = error_code == 'PERSON_MOBILE_ALREADY_EXISTS' ? 'person_mobile_already_exists_sms' : 'person_email_already_exists_sms'
+                  user.errors.add(:base, I18n.t("spl.errors.#{error_key}", email: user.email))
+                rescue Spl::SendOtpService::SplSendOtpError => otp_error
+                  handle_spl_error(otp_error, user)
+                end
+                
+                render turbo_stream: turbo_stream.replace(
+                  'otp_registration_form',
+                  partial: 'spl/otp_code_form',
+                  locals: { user: user, phone_e164: phone.e164 }
+                ), status: :unprocessable_content
+                return
+              end
+            end
+          end
+
+          handle_spl_error(e, user)
+          render_connect_loyalty_account_error(user, user.phone, 'otp_registration_form')
+        rescue Spl::OauthTokenService::OauthTokenError => e
+          user = try_spree_current_user
+          handle_spl_error(e, user)
           render_connect_loyalty_account_error(user, user.phone, 'otp_registration_form')
         end
 

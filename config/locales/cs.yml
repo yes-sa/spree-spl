@@ -11,7 +11,7 @@ cs:
       code_label: One-time code
       errors:
         must_accept_yc_terms: You must accept the loyalty club terms and conditions to continue
-        invalid_phone: Invalid phone number
+        invalid_phone: is invalid
     card_validation:
       errors:
         card_not_active: Karta není aktivní
@@ -36,6 +36,8 @@ cs:
       coupon_already_used: This coupon has already been used.
       temporary_blocked: Temporarily blocked due to too many attempts. Please try again later.
       person_not_found: Person not found.
+      person_mobile_already_exists_sms: Telefonní číslo je již v klubu registrováno. Odeslali jsme nový kód SMS pro připojení vašeho účtu.
+      person_email_already_exists_sms: Účet s adresou %{email} již existuje. Odeslali jsme nový kód SMS, abyste mohli propojit své účty.
       unknow_error: NEZNÁMÁ_CHYBA
   buttons:
     connect_account: Connect loyalty account

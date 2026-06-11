@@ -11,7 +11,7 @@ en:
       code_label: One-time code
       errors:
         must_accept_yc_terms: You must accept the loyalty club terms and conditions to continue
-        invalid_phone: Invalid phone number
+        invalid_phone: is invalid
     card_validation:
       errors:
         card_not_active: Card is not active
@@ -36,6 +36,8 @@ en:
       coupon_already_used: This coupon has already been used.
       temporary_blocked: Temporarily blocked due to too many attempts. Please try again later.
       person_not_found: Person not found.
+      person_mobile_already_exists_sms: The phone number is already registered in the club. We have sent a new SMS code to connect your account.
+      person_email_already_exists_sms: Account with address %{email} already exists. We have sent a new SMS code so you can connect your accounts.
       unknow_error: UNKNOWN_ERROR
   buttons:
     connect_account: Connect loyalty account

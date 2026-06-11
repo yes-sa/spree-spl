@@ -23,7 +23,7 @@ module Spl
       request = Net::HTTP::Post.new(@url)
       request['Content-Type'] = 'application/json'
       request.body = @body.to_json
-      Rails.logger.debug request.body.inspect
+      Rails.logger.debug "[SPL REQUEST BODY] #{request.body.inspect}"
       http.request(request)
     end
   end

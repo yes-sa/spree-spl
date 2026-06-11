@@ -251,15 +251,60 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
       allow(controller).to receive(:spree_current_user).and_return(user)
     end
 
-    context 'when registration succeeds' do
-      it 'calls RegisterAccountService and redirects with notice' do
+    context 'when registration succeeds but session upgrade fails (no access token)' do
+      it 'sends a login OTP and renders otp_code_form as fallback' do
         service_instance = instance_double(Spl::RegisterAccountService)
+        otp_service = instance_double('Spl::SendOtpService')
 
-        expect(Spl::RegisterAccountService).to receive(:new)
+        allow(Spl::RegisterAccountService).to receive(:new)
           .with(user, store, '123456')
           .and_return(service_instance)
+        allow(service_instance).to receive(:call)
 
-        expect(service_instance).to receive(:call)
+        # Simulate no session upgrade (no access token in private_metadata)
+        allow(user).to receive(:private_metadata).and_return({})
+
+        phone_obj = instance_double(PhoneParserService, country_code: '+48', national_number: '500600700', e164: '+48500600700')
+        allow(PhoneParserService).to receive(:new).with(user.phone).and_return(phone_obj)
+
+        expect(Spl::SendOtpService).to receive(:new)
+          .with(kind_of(DateTime), '+48', '500600700', store)
+          .and_return(otp_service)
+        expect(otp_service).to receive(:call)
+
+        expect(controller).to receive(:render).with(hash_including(status: :unprocessable_content))
+
+        controller.register_loyalty_account
+
+        expect(user.errors.full_messages.join(' '))
+          .to include('Rejestracja zakończona pomyślnie')
+      end
+    end
+
+    context 'when PERSON_EMAIL_ALREADY_EXISTS and auto-connect succeeds' do
+      it 'logs in with existing OTP and redirects' do
+        service_instance = instance_double(Spl::RegisterAccountService)
+        login_service = instance_double(Spl::LoginAccountService)
+        assign_service = instance_double(AssignSpartaCardNumberService)
+
+        payload = {
+          'errorCode' => 'PERSON_EMAIL_ALREADY_EXISTS',
+          'msg' => 'Customer with this email is already registered'
+        }
+
+        allow(Spl::RegisterAccountService).to receive(:new).and_return(service_instance)
+        allow(service_instance).to receive(:call)
+          .and_raise(Spl::RegisterAccountService::SplRegisterAccountError.new(payload.inspect))
+
+        expect(Spl::LoginAccountService).to receive(:new)
+          .with(user, store, params_hash)
+          .and_return(login_service)
+        expect(login_service).to receive(:call)
+
+        expect(AssignSpartaCardNumberService).to receive(:new)
+          .with(user, store)
+          .and_return(assign_service)
+        expect(assign_service).to receive(:call)
 
         expect(controller).to receive(:redirect_to).with(
           spree.edit_account_profile_path,
@@ -267,6 +312,82 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
         )
 
         controller.register_loyalty_account
+      end
+    end
+
+    context 'when PERSON_EMAIL_ALREADY_EXISTS and auto-connect fails' do
+      it 'sends a fresh SMS and renders otp_code_form' do
+        service_instance = instance_double(Spl::RegisterAccountService)
+        login_service = instance_double(Spl::LoginAccountService)
+        otp_service = instance_double('Spl::SendOtpService')
+
+        payload = {
+          'errorCode' => 'PERSON_EMAIL_ALREADY_EXISTS',
+          'msg' => 'Customer with this email is already registered'
+        }
+
+        allow(Spl::RegisterAccountService).to receive(:new).and_return(service_instance)
+        allow(service_instance).to receive(:call)
+          .and_raise(Spl::RegisterAccountService::SplRegisterAccountError.new(payload.inspect))
+
+        allow(Spl::LoginAccountService).to receive(:new).and_return(login_service)
+        allow(login_service).to receive(:call)
+          .and_raise(Spl::LoginAccountService::SplLoginAccountError.new('AUTH_FAILED'))
+
+        phone_obj = instance_double(PhoneParserService, country_code: '+48', national_number: '500600700', e164: '+48500600700')
+        allow(PhoneParserService).to receive(:new).with(user.phone).and_return(phone_obj)
+
+        expect(Spl::SendOtpService).to receive(:new)
+          .with(kind_of(DateTime), '+48', '500600700', store)
+          .and_return(otp_service)
+        expect(otp_service).to receive(:call)
+
+        expect(controller).to receive(:render).with(hash_including(status: :unprocessable_content))
+
+        controller.register_loyalty_account
+
+        expect(user.errors.full_messages.join(' '))
+          .to include(I18n.t('spl.errors.person_email_already_exists_sms', email: user.email))
+      end
+    end
+
+    context 'when PERSON_EMAIL_ALREADY_EXISTS and SendOtpService is rate-limited' do
+      it 'renders the rate-limit error without crashing' do
+        service_instance = instance_double(Spl::RegisterAccountService)
+        login_service = instance_double(Spl::LoginAccountService)
+        otp_service = instance_double('Spl::SendOtpService')
+
+        reg_payload = {
+          'errorCode' => 'PERSON_EMAIL_ALREADY_EXISTS',
+          'msg' => 'Customer with this email is already registered'
+        }
+
+        blocked_payload = {
+          'errorCode' => 'TEMPORARY_BLOCKED',
+          'msg' => 'Temporarily blocked (too much attempts)'
+        }
+
+        allow(Spl::RegisterAccountService).to receive(:new).and_return(service_instance)
+        allow(service_instance).to receive(:call)
+          .and_raise(Spl::RegisterAccountService::SplRegisterAccountError.new(reg_payload.inspect))
+
+        allow(Spl::LoginAccountService).to receive(:new).and_return(login_service)
+        allow(login_service).to receive(:call)
+          .and_raise(Spl::LoginAccountService::SplLoginAccountError.new('AUTH_FAILED'))
+
+        phone_obj = instance_double(PhoneParserService, country_code: '+48', national_number: '500600700', e164: '+48500600700')
+        allow(PhoneParserService).to receive(:new).with(user.phone).and_return(phone_obj)
+
+        allow(Spl::SendOtpService).to receive(:new).and_return(otp_service)
+        allow(otp_service).to receive(:call)
+          .and_raise(Spl::SendOtpService::SplSendOtpError.new(blocked_payload.inspect))
+
+        expect(controller).to receive(:render).with(hash_including(status: :unprocessable_content))
+
+        controller.register_loyalty_account
+
+        expect(user.errors.full_messages.join(' '))
+          .to include(I18n.t('spl.errors.temporary_blocked'))
       end
     end
 
@@ -299,6 +420,32 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
 
     context 'when OauthTokenService raises error' do
       include_examples 'register_loyalty_account error', Spl::OauthTokenService::OauthTokenError
+    end
+  end
+
+  describe '#connect_loyalty_account with redirect_to param' do
+    let(:service_params) { { user: { spl_auth_code: '123456' }, redirect_to: 'http://localhost:3000/cart' } }
+
+    before do
+      allow(controller).to receive(:params).and_return(service_params)
+    end
+
+    it 'redirects to redirect_to param instead of profile path' do
+      login_service  = instance_double(Spl::LoginAccountService)
+      assign_service = instance_double(AssignSpartaCardNumberService)
+
+      allow(Spl::LoginAccountService).to receive(:new).and_return(login_service)
+      allow(login_service).to receive(:call)
+
+      allow(AssignSpartaCardNumberService).to receive(:new).and_return(assign_service)
+      allow(assign_service).to receive(:call)
+
+      expect(controller).to receive(:redirect_to).with(
+        'http://localhost:3000/cart',
+        hash_including(notice: Spree.t(:successfully_updated, resource: Spree.t(:account)))
+      )
+
+      controller.connect_loyalty_account
     end
   end
 end
