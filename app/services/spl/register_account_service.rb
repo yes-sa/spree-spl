@@ -22,7 +22,7 @@ module Spl
       register_body = prepare_registration_body(access_token)
       register_response = send_request(@register_url, register_body)
       register_response_body = JSON.parse(register_response.body)
-      Rails.logger.debug "[SPL REGISTER RESPONSE] #{register_response_body.inspect}"
+      Rails.logger.debug { "[SPL REGISTER RESPONSE] #{register_response_body.inspect}" }
       raise SplRegisterAccountError, register_response_body if register_response_body['errorCode'] != '0'
 
       spl_card = register_response_body.dig('response', 'cardNo')
@@ -32,7 +32,7 @@ module Spl
 
     private
 
-    def upgrade_session_if_needed(register_response_body, spl_card)
+    def upgrade_session_if_needed(register_response_body, spl_card) # rubocop:disable Metrics/MethodLength
       otp_token = register_response_body.dig('response', 'otpLoginToken')
       if otp_token.blank?
         Rails.logger.warn "[SPL] No otpLoginToken in registration response for card #{spl_card}. Session upgrade skipped."
@@ -87,4 +87,3 @@ module Spl
     end
   end
 end
-

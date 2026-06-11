@@ -3,7 +3,7 @@
 module Spl
   module Spree
     module Storefront
-      module ProfileControllerDecorator
+      module ProfileControllerDecorator # rubocop:disable Metrics/ModuleLength
         include BooleanHelper
         include ProfileControllerHelper
         include ErrorHandlingHelper
@@ -22,7 +22,7 @@ module Spl
           render_login_code_error(try_spree_current_user)
         end
 
-        def connect_loyalty_account
+        def connect_loyalty_account # rubocop:disable Metrics/AbcSize
           assign_card_number(try_spree_current_user, current_store, params)
           redirect_to safe_redirect_url(params[:redirect_to], spree.edit_account_profile_path),
                       notice: ::Spree.t(:successfully_updated, resource: ::Spree.t(:account))
@@ -41,10 +41,11 @@ module Spl
           render_login_code_error(try_spree_current_user)
         end
 
+        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockNesting
         def register_loyalty_account
           user = try_spree_current_user
           Spl::RegisterAccountService.new(user, current_store, params.dig('user', 'spl_auth_code')).call
-          
+
           user.reload
           Rails.cache.delete("user_#{user.id}_spl_data")
           Rails.cache.delete("user_#{user.id}_spl_coupons")
@@ -71,11 +72,11 @@ module Spl
         rescue Spl::RegisterAccountService::SplRegisterAccountError => e
           user = try_spree_current_user
           parsed_error = ::Spl::ErrorPayloadParser.parse(e.message) || {}
-          
+
           if parsed_error.is_a?(Hash)
             error_code = parsed_error['errorCode']
-            
-            if error_code == 'PERSON_MOBILE_ALREADY_EXISTS' || error_code == 'PERSON_EMAIL_ALREADY_EXISTS'
+
+            if %w[PERSON_MOBILE_ALREADY_EXISTS PERSON_EMAIL_ALREADY_EXISTS].include?(error_code)
               begin
                 # Reuse the OTP the user already submitted to log in and assign their existing card
                 Spl::LoginAccountService.new(user, current_store, params).call
@@ -100,7 +101,7 @@ module Spl
                 rescue Spl::SendOtpService::SplSendOtpError => otp_error
                   handle_spl_error(otp_error, user)
                 end
-                
+
                 render turbo_stream: turbo_stream.replace(
                   'otp_registration_form',
                   partial: 'spl/otp_code_form',
@@ -118,6 +119,7 @@ module Spl
           handle_spl_error(e, user)
           render_connect_loyalty_account_error(user, user.phone, 'otp_registration_form')
         end
+        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockNesting
 
         private
 
@@ -221,11 +223,11 @@ module Spl
 
         def safe_redirect_url(redirect_param, default_path)
           return default_path if redirect_param.blank?
-          
+
           uri = URI.parse(redirect_param)
           # Only allow relative URLs or same-host URLs
           return redirect_param if uri.relative? || uri.host == request.host
-          
+
           default_path
         rescue URI::InvalidURIError
           default_path
