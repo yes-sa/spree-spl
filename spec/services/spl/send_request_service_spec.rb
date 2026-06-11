@@ -34,7 +34,9 @@ RSpec.describe Spl::SendRequestService, type: :service do
       allow(Net::HTTP).to receive(:new).and_return(http)
       allow(http).to receive(:use_ssl=)
 
-      expect(Rails.logger).to receive(:debug).with("[SPL REQUEST BODY] #{body.to_json.inspect}")
+      expect(Rails.logger).to receive(:debug) do |&block|
+        expect(block.call).to eq("[SPL REQUEST BODY] #{body.to_json.inspect}")
+      end
 
       allow(http).to receive(:request).and_return(response)
 
