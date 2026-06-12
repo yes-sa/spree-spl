@@ -59,8 +59,7 @@ module Spl
             # Send a login OTP so the user can complete the connection.
             phone = PhoneParserService.new(user.phone)
             Spl::SendOtpService.new(DateTime.current, phone.country_code, phone.national_number, current_store).call
-            user.errors.add(:base, I18n.t('spl.user.registration_success_enter_login_code',
-                                          default: 'Rejestracja zakończona pomyślnie. Wpisz kod, który wysłaliśmy SMS-em, aby połączyć konto.'))
+            user.errors.add(:base, I18n.t('spl.user.registration_success_enter_login_code'))
             # Render otp_code_form (posts to connect_loyalty_account) targeting
             # otp_registration_form (the element currently in the DOM).
             render turbo_stream: turbo_stream.replace(
