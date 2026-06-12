@@ -277,7 +277,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
         controller.register_loyalty_account
 
         expect(user.errors.full_messages.join(' '))
-          .to include('Rejestracja zakończona pomyślnie')
+          .to include(I18n.t('spl.user.registration_success_enter_login_code'))
       end
     end
 
