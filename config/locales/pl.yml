@@ -8,6 +8,7 @@ pl:
       have_account: Czy masz konto w klubie lojalnościowym?
       accept_yc_terms_label: Akceptuje regulamin
       sent_to: Wysłano kod na numer %{phone}
+      registration_success_enter_login_code: Rejestracja zakończona pomyślnie. Wpisz kod, który wysłaliśmy SMS-em, aby połączyć konto.
       code_label: Jednorazowy kod
       errors:
         must_accept_yc_terms: Musisz zaakceptować regulamin klubu lojalnościowego
@@ -37,6 +38,8 @@ pl:
       coupon_already_used: Ten kupon został już wykorzystany.
       temporary_blocked: Tymczasowo zablokowano z powodu zbyt wielu prób. Spróbuj ponownie później.
       person_not_found: Nie znaleziono użytkownika
+      person_mobile_already_exists_sms: Numer telefonu jest już zarejestrowany w klubie. Wysłaliśmy nowy kod SMS, aby połączyć Twoje konto.
+      person_email_already_exists_sms: Konto z adresem %{email} już istnieje. Wysłaliśmy nowy kod SMS, abyś mógł połączyć swoje konta.
       unknow_error: NIEZNANY_BŁĄD
   buttons:
     connect_account: Połącz z kontem lojalnościowym

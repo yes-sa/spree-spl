@@ -30,11 +30,13 @@ RSpec.describe Spl::SendRequestService, type: :service do
       expect(result).to eq(response)
     end
 
-    it 'logs the request body (debug)' do
+    it 'logs the request body with [SPL REQUEST BODY] prefix' do
       allow(Net::HTTP).to receive(:new).and_return(http)
       allow(http).to receive(:use_ssl=)
 
-      expect(Rails.logger).to receive(:debug).with(body.to_json.inspect)
+      expect(Rails.logger).to receive(:debug) do |&block|
+        expect(block.call).to eq("[SPL REQUEST BODY] #{body.to_json.inspect}")
+      end
 
       allow(http).to receive(:request).and_return(response)
 
