@@ -22,26 +22,38 @@ module Spl
       register_body = prepare_registration_body(access_token)
       register_response = send_request(@register_url, register_body)
       register_response_body = JSON.parse(register_response.body)
-      Rails.logger.debug register_response_body
+      Rails.logger.debug { "[SPL REGISTER RESPONSE] #{register_response_body.inspect}" }
       raise SplRegisterAccountError, register_response_body if register_response_body['errorCode'] != '0'
 
       spl_card = register_response_body.dig('response', 'cardNo')
-      update_account(spl_card, oauth_response_body)
+      save_card_number(spl_card)
       upgrade_session_if_needed(register_response_body, spl_card)
     end
 
     private
 
-    def upgrade_session_if_needed(register_response_body, spl_card)
-      return if (otp_token = register_response_body.dig('response', 'otpLoginToken')).blank?
+    def upgrade_session_if_needed(register_response_body, spl_card) # rubocop:disable Metrics/MethodLength
+      otp_token = register_response_body.dig('response', 'otpLoginToken')
+      if otp_token.blank?
+        Rails.logger.warn "[SPL] No otpLoginToken in registration response for card #{spl_card}. Session upgrade skipped."
+        return false
+      end
 
-      # Trigger an internal login to upgrade the session immediately
+      Rails.logger.info "[SPL] Attempting session upgrade with otpLoginToken for card #{spl_card}"
+      # Trigger an internal login to upgrade the session immediately.
+      # LoginAccountService saves user-scoped tokens to private_metadata on success.
+      # We pass the card_number so LoginAccountService uses it as the login identifier.
       Spl::LoginAccountService.new(
         @user,
         @store,
         { 'user' => { 'spl_auth_code' => otp_token, 'card_number' => spl_card } },
-        raw_otp: true
+        raw_otp: false
       ).call
+      Rails.logger.info "[SPL] Session upgrade succeeded for card #{spl_card}"
+      true
+    rescue StandardError => e
+      Rails.logger.warn "[SPL] Session upgrade failed after registration (card: #{spl_card}): #{e.class}: #{e.message}"
+      false
     end
 
     def prepare_registration_body(access_token) # rubocop:disable Metrics/MethodLength
@@ -68,13 +80,10 @@ module Spl
       }
     end
 
-    def update_account(card_number, oauth_response_body)
-      @user.private_metadata ||= {} if @user.private_metadata.blank?
-      @user.update(public_metadata: @user.public_metadata.merge(spl_no_card: card_number, spl_card_active: true),
-                   private_metadata: @user.private_metadata.merge(
-                     spl_access_token: oauth_response_body.dig('response', 'accessToken'),
-                     spl_refresh_token: oauth_response_body.dig('response', 'refreshToken')
-                   ))
+    # Only save the card number — NOT the anonymous tokens.
+    # User-scoped tokens are saved by LoginAccountService after a successful session upgrade.
+    def save_card_number(card_number)
+      @user.update(public_metadata: @user.public_metadata.merge(spl_no_card: card_number, spl_card_active: true))
     end
   end
 end

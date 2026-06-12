@@ -56,10 +56,10 @@ RSpec.describe Spl::RegisterAccountService do
         )
       end
 
-      it 'updates user private_metadata with tokens' do
+      it 'does not save anonymous tokens to private_metadata' do
         service.call
 
-        expect(user.private_metadata).to include('spl_access_token' => 'ACCESS_TOKEN', 'spl_refresh_token' => 'REFRESH_TOKEN')
+        expect(user.private_metadata).not_to include('spl_access_token', 'spl_refresh_token')
       end
 
       it 'sends correct payload to SendRequestService' do
@@ -143,7 +143,7 @@ RSpec.describe Spl::RegisterAccountService do
           user,
           store,
           { 'user' => { 'spl_auth_code' => 'TOKEN_ABC_123', 'card_number' => 'CARD123' } },
-          raw_otp: true
+          raw_otp: false
         ).and_return(login_service)
         allow(login_service).to receive(:call)
       end
