@@ -1,3 +1,12 @@
+Version 3.0.2:
+ - Merge pull request #5 from yes-sa/VS-77-registration-fixes
+ - VS-77-registration-fixes - PR translation test
+ - VS-77-registration-fixes - PR translation fix
+ - VS-77-registration-fixes - failing test fix
+ - VS-77-registration-fixes - linter fixes
+ - VS-77-registration-fixes - brakeman fixes
+ - VS-77 - registration flow fixes
+
 Version 3.0.1:
  - Merge branch 'release-3.0.0' into develop
  - Merge branch 'release-3.0.0'
