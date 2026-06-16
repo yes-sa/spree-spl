@@ -1,3 +1,6 @@
+Version git checkout staging:
+ - Merge branch 'release-3.0.2'
+
 Version 3.0.2:
  - Merge pull request #5 from yes-sa/VS-77-registration-fixes
  - VS-77-registration-fixes - PR translation test
