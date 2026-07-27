@@ -3,6 +3,12 @@
 class PromotionSwitcherService
   include BooleanHelper
 
+  SPL_RATE_LIMIT_ERRORS = %w[
+    TOO_MANY_TRANSACTION_UPDATES
+    REQUEST_ALREADY_PROCESSED
+    OPERATION_IN_PROGRESS
+  ].freeze
+
   def initialize(order, check_only)
     @check_only = check_only
     @line_items = order.line_items
@@ -10,6 +16,27 @@ class PromotionSwitcherService
   end
 
   def call
+    if Spree::Spl.config.promotion_switcher_status_result
+      call_with_status
+    else
+      call_legacy
+    end
+  end
+
+  private
+
+  attr_accessor :check_only, :line_items, :order
+
+  def call_with_status
+    apply_sparta_discount(order, check_only)
+    :success
+  rescue Spl::SpartaLoyaltyService::SplSendRequestError => e
+    handle_spl_send_request_error(e)
+  rescue StandardError => e
+    handle_switcher_failure_status(e)
+  end
+
+  def call_legacy
     apply_sparta_discount(order, check_only)
   rescue StandardError => e
     Rails.logger.error("[PromotionSwitcher] Failed for Order #{order.id}: #{e.message}")
@@ -17,21 +44,34 @@ class PromotionSwitcherService
     order
   end
 
-  private
+  def handle_spl_send_request_error(error)
+    if spl_retriable_error?(error)
+      Rails.logger.warn("[PromotionSwitcher] SPL skipped for Order #{order.id}: #{error.message}")
+      return :rate_limited
+    end
 
-  attr_accessor :check_only, :line_items, :order
+    handle_switcher_failure_status(error)
+  end
+
+  def handle_switcher_failure_status(error)
+    Rails.logger.error("[PromotionSwitcher] Failed for Order #{order.id}: #{error.message}")
+    remove_sparta_discount(order)
+    :failed
+  end
 
   def apply_sparta_discount(order, check_only)
     return unless order.line_items.any?
 
     card_number = prepare_card_number_if_exist(order.public_metadata)
-    spl_response = Spl::SpartaLoyaltyService.new(order.token,
-                                                 card_number,
-                                                 order.line_items,
-                                                 DateTime.current,
-                                                 order.products,
-                                                 check_only,
-                                                 order.store).call
+    spl_response = Spl::SpartaLoyaltyService.new(
+      spl_transaction_no(order),
+      card_number,
+      order.line_items,
+      DateTime.current,
+      order.products,
+      check_only,
+      order.store
+    ).call
     return unless spl_response
 
     create_sparta_adjustments(spl_response, order)
@@ -41,7 +81,24 @@ class PromotionSwitcherService
     ApplySpartaDiscountService.new(spl_response, order).call
   end
 
+  # Safer card-active lookup (string/symbol keys). Missing card number stays nil (legacy).
   def prepare_card_number_if_exist(metadata)
-    cast_boolean(metadata[:spl_card_active]) ? metadata['spl_no_card'] : ''
+    meta = metadata.to_h.stringify_keys
+    return '' unless cast_boolean(meta['spl_card_active'])
+
+    meta['spl_no_card']
+  end
+
+  # Falls back to order.token when no custom tx number is set (legacy-compatible).
+  def spl_transaction_no(order)
+    order.private_metadata['spl_tx_no'].presence || order.token
+  end
+
+  def spl_retriable_error?(error)
+    SPL_RATE_LIMIT_ERRORS.any? { |code| error.message.include?(code) }
+  end
+
+  def remove_sparta_discount(order)
+    RemoveSpartaDiscountService.destroy_all_sparta_adjustments(order)
   end
 end

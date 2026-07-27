@@ -10,9 +10,22 @@ class ApplySpartaDiscountService
     @response = response
   end
 
-  def call # rubocop:disable Metrics/AbcSize
+  def call
     return unless response_valid?
+    return ApplySpartaMultiCouponDiscountService.new(response, order).call if Spree::Spl.config.multi_coupon_adjustments
 
+    apply_legacy_adjustments
+  end
+
+  private
+
+  attr_accessor :basket, :line_items, :order, :response
+
+  def response_valid?
+    response['errorCode'] == '0' && response['response'].present? && response['response']['basket'].present?
+  end
+
+  def apply_legacy_adjustments # rubocop:disable Metrics/AbcSize
     line_items.each do |line_item|
       sparta_item = basket.find { |i| i['pos'] == line_item['id'] }
       spl_adjustment_present_and_spl_discounts_nil?(sparta_item, line_item)
@@ -28,17 +41,12 @@ class ApplySpartaDiscountService
     RemoveSpartaDiscountService.destroy_not_spl_adjustments(order)
   end
 
-  private
-
-  attr_accessor :basket, :line_items, :order, :response
-
-  def response_valid?
-    response['errorCode'] == '0' && response['response'].present? && response['response']['basket'].present?
-  end
-
   def spl_adjustment_present_and_spl_discounts_nil?(sparta_item, line_item)
-    return false unless sparta_item['discounts'].nil? && line_item.adjustments.any? { |a| a.preferred_external_source_type == SPL_SOURCE_TYPE }
-    
+    unless sparta_item['discounts'].nil? &&
+           line_item.adjustments.any? { |a| a.preferred_external_source_type == SPL_SOURCE_TYPE }
+      return false
+    end
+
     adjustments = line_item.adjustments.where('preferences LIKE ?', "%:external_source_type: #{SPL_SOURCE_TYPE}%")
     RemoveSpartaDiscountService.destroy_inactive_adjustments(adjustments, line_item, order)
   end
@@ -65,7 +73,7 @@ class ApplySpartaDiscountService
       **preferences
     )
 
-    ::Spree::Dependencies.cart_recalculate_service.constantize.call(order: order, line_item: line_item)
+    Spree::Dependencies.cart_recalculate_service.constantize.call(order: order, line_item: line_item)
   end
 
   def update_sparta_adjustment(line_item, label, amount)

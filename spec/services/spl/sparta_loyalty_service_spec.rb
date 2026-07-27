@@ -205,7 +205,7 @@ RSpec.describe Spl::SpartaLoyaltyService, type: :service do
               pos: line_item2.id,
               productCode: 'BS49252-BZ020-PSA000-001',
               quantity: 3,
-              amountGross: 24.0,
+              amountGross: 7.73,
               notPromoted: false
             }
           ]
@@ -214,6 +214,23 @@ RSpec.describe Spl::SpartaLoyaltyService, type: :service do
         expect(captured_body[:ver]).to eq(4)
         expect(captured_body[:signature]).to be_a(String)
         expect(captured_body[:signature].size).to eq(64)
+      end
+
+      context 'when basket_amount_gross is :line_total' do
+        before { Spree::Spl.config.basket_amount_gross = :line_total }
+        after { Spree::Spl.config.basket_amount_gross = :unit_price }
+
+        it 'uses line item amount for amountGross' do
+          expect(Spl::SendRequestService).to receive(:new) do |_url, body|
+            expect(body[:basket].pluck(:amountGross)).to eq(
+              [line_item1.amount.to_f, line_item2.amount.to_f]
+            )
+            send_request_service_double
+          end
+          expect(send_request_service_double).to receive(:call).and_return(http_response)
+
+          service.call
+        end
       end
     end
 

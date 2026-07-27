@@ -213,5 +213,22 @@ RSpec.describe PromotionSwitcherService, type: :service do
         service.call
       end
     end
+
+    context 'when promotion_switcher_status_result is enabled' do
+      before { Spree::Spl.config.promotion_switcher_status_result = true }
+      after { Spree::Spl.config.promotion_switcher_status_result = false }
+
+      it 'returns :success on a successful pricing call' do
+        sparta_service_double = instance_double(Spl::SpartaLoyaltyService)
+        apply_service_double = instance_double(ApplySpartaDiscountService)
+
+        allow(Spl::SpartaLoyaltyService).to receive(:new).and_return(sparta_service_double)
+        allow(sparta_service_double).to receive(:call).and_return(example_sparta_response)
+        allow(ApplySpartaDiscountService).to receive(:new).and_return(apply_service_double)
+        allow(apply_service_double).to receive(:call)
+
+        expect(service.call).to eq(:success)
+      end
+    end
   end
 end

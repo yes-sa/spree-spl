@@ -58,15 +58,22 @@ module Spl
 
     def prepare_basket
       @line_items.map do |item|
-        not_promoted = product_not_promoted?(item['variant_id'])
-
         {
           pos: item.id,
           quantity: item.quantity,
           productCode: item.sku,
-          amountGross: item.price.to_f,
-          notPromoted: not_promoted
+          amountGross: amount_gross_for(item),
+          notPromoted: product_not_promoted?(item['variant_id'])
         }
+      end
+    end
+
+    def amount_gross_for(item)
+      case ::Spree::Spl.config.basket_amount_gross
+      when :line_total
+        item.amount.to_f
+      else
+        item.price.to_f
       end
     end
 
