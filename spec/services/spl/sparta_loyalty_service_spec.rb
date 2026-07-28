@@ -205,7 +205,7 @@ RSpec.describe Spl::SpartaLoyaltyService, type: :service do
               pos: line_item2.id,
               productCode: 'BS49252-BZ020-PSA000-001',
               quantity: 3,
-              amountGross: 7.73,
+              amountGross: 24.0,
               notPromoted: false
             }
           ]
