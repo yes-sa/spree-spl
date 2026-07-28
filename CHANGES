@@ -1,3 +1,27 @@
+Version 3.1.0:
+ - Merge pull request #6 from yes-sa/VS-163-multi-coupon-reprice
+ - Fix failing spec
+ - Apply multi-coupons for Verona
+ - Merge branch 'release-3.0.2' into develop
+ - VERSION fix
+ - Version bump to git checkout staging
+ - Merge branch 'release-3.0.2'
+ - Merge branch 'release-3.0.2' into staging
+ - Merge branch 'release-3.0.1' into staging
+ - Merge branch 'release-3.0.0' into staging
+ - Merge branch 'hotfix-2.3.1' into staging
+ - Merge branch 'release-2.3.0' into staging
+ - Merge branch 'release-2.2.0' into staging
+ - Merge branch 'release-2.1.0' into staging
+ - Merge branch 'release-2.0.0' into staging
+ - Merge branch 'release-1.6.0' into staging
+ - Merge branch 'release-1.5.0' into staging
+ - Merge branch 'release-1.4.0' into staging
+ - Merge branch 'release-1.3.0' into staging
+ - Merge branch 'release-1.2.0' into staging
+ - Merge branch 'release-1.1.0' into staging
+ - Merge branch 'release-1.0.0' into staging
+
 Version git checkout staging:
  - Merge branch 'release-3.0.2'
 
