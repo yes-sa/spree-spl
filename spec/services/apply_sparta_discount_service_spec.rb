@@ -111,6 +111,48 @@ RSpec.describe ApplySpartaDiscountService, type: :service do
       expect(line_item2.adjustments.select { |a| a.preferred_external_source_type == 'SPL' }.count).to eq(1)
     end
 
+    context 'when multi_coupon_adjustments is enabled' do
+      before do
+        Spree::Spl.config.multi_coupon_adjustments = true
+      end
+
+      after do
+        Spree::Spl.config.multi_coupon_adjustments = false
+      end
+
+      it 'updates existing SPL adjustment by preferred_external_name' do
+        external_name = 'K2555L. Choose your benefit 2025 -600 Kč při nákupu od 3 000 Kč'
+        existing = line_item2.adjustments.create!(
+          preferred_external_source_type: 'SPL',
+          preferred_external_name: external_name,
+          preferred_trade_agreement_number: 'K2555L',
+          amount: -0.5,
+          label: 'Choose your benefit 2025 -600 Kč při nákupu od 3 000 Kč',
+          order: order,
+          adjustable: line_item2
+        )
+
+        service.call
+
+        existing.reload
+        expect(existing.amount).to eq(-0.8)
+        expect(line_item2.adjustments.select { |a| a.preferred_external_source_type == 'SPL' }.count).to eq(1)
+      end
+
+      it 'creates one adjustment per coupon when Sparta returns multiple discounts' do
+        sparta_basket[1]['discountGross'] = 1.5
+        sparta_basket[1]['discounts'] = [
+          { 'name' => '123L.Dla Patryka', 'amount' => 0.8 },
+          { 'name' => 'V468#1.Kupon 20%', 'amount' => 0.7 }
+        ]
+
+        service.call
+
+        labels = line_item2.adjustments.select { |a| a.preferred_external_source_type == 'SPL' }.map(&:label)
+        expect(labels).to contain_exactly('Dla Patryka', 'Kupon 20%')
+      end
+    end
+
     it 'removes SPL adjustments if Sparta discount becomes nil' do
       line_item2.adjustments.create!(
         preferred_external_source_type: 'SPL',
