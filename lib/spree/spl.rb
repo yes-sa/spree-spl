@@ -2,6 +2,7 @@
 
 require 'spree/spl/version'
 require 'spree/spl/engine'
+require 'spree/spl/configuration'
 
 require 'rails/all'
 require 'spree_core'
