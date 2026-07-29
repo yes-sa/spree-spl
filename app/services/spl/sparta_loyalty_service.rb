@@ -9,7 +9,8 @@ module Spl
     class SplSendRequestError < StandardError; end
     include SplServiceHelper
 
-    def initialize(order_token, card_number, line_items, date, products, check_only, store)
+    def initialize(order_token, card_number, line_items, date, products, check_only, store, # rubocop:disable Metrics/ParameterLists
+                   coupons: [], shipping_amount: nil)
       @order_token = order_token
       @card_number = card_number
       @line_items = line_items
@@ -17,6 +18,8 @@ module Spl
       @products = products
       @check_only = check_only
       @store = store
+      @coupons = Array(coupons).map { |code| code.to_s.strip }.compact_blank
+      @shipping_amount = shipping_amount
       @url = URI.parse(Spl::UrlCreatorService.new(store.private_metadata['spl_url']).sale)
     end
 
@@ -37,7 +40,7 @@ module Spl
     private
 
     def prepare_basket_body # rubocop:disable Metrics/MethodLength
-      {
+      body = {
         ver: 4,
         apiUser: @store.private_metadata['spl_api_user'],
         apiToken: @store.private_metadata['spl_api_token'],
@@ -54,10 +57,12 @@ module Spl
         basket: prepare_basket,
         signature: generate_signature
       }
+      body[:coupons] = @coupons if @coupons.any?
+      body
     end
 
     def prepare_basket
-      @line_items.map do |item|
+      items = @line_items.map do |item|
         {
           pos: item.id,
           quantity: item.quantity,
@@ -66,6 +71,9 @@ module Spl
           notPromoted: product_not_promoted?(item['variant_id'])
         }
       end
+      return items if @shipping_amount.nil? || !@shipping_amount.to_d.positive?
+
+      items + [ShippingBasketLine.basket_item(@shipping_amount)]
     end
 
     def amount_gross_for(item)

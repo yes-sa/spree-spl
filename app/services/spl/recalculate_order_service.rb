@@ -52,8 +52,15 @@ module Spl
 
       card_state = @order.public_metadata.slice('spl_no_card', 'spl_card_active')
       coupon_version = @order.private_metadata['spl_coupon_version']
+      fingerprint_parts = [items, card_state, coupon_version]
+      if ::Spree::Spl.config.manual_discount_codes?
+        fingerprint_parts << ManualCoupons.for_order(@order)
+      end
+      if ShippingBasketLine.enabled?
+        fingerprint_parts << ShippingBasketLine.amount_for(@order)
+      end
 
-      Digest::SHA256.hexdigest([items, card_state, coupon_version].to_json)
+      Digest::SHA256.hexdigest(fingerprint_parts.to_json)
     end
 
     def stored_fingerprint

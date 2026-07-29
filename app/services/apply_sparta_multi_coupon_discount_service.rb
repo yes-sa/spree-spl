@@ -23,6 +23,7 @@ class ApplySpartaMultiCouponDiscountService
         sync_spl_adjustments(line_item, discounts)
       end
     end
+    sync_shipping_spl_adjustments
     RemoveSpartaDiscountService.destroy_not_spl_adjustments(order)
   end
 
@@ -112,5 +113,77 @@ class ApplySpartaMultiCouponDiscountService
 
   def recalculate(line_item)
     Spree::Dependencies.cart_recalculate_service.constantize.call(order: order, line_item: line_item)
+  end
+
+  def sync_shipping_spl_adjustments
+    return unless Spl::ShippingBasketLine.enabled?
+
+    shipment = order.shipments.first
+    shipping_item = basket.find { |item| Spl::ShippingBasketLine.shipping_pos?(item['pos']) }
+    discounts = sparta_discounts_for(shipping_item)
+
+    unless shipment
+      return if discounts.empty?
+
+      Rails.logger.info(
+        "[SPL] Shipping discounts returned but order #{order.id} has no shipment yet; skipping apply"
+      )
+      return
+    end
+
+    if discounts.empty?
+      clear_spl_adjustments_for_shipment(shipment)
+    else
+      sync_spl_adjustments_for_shipment(shipment, discounts)
+    end
+  end
+
+  def clear_spl_adjustments_for_shipment(shipment)
+    adjustments = spl_adjustments_for_shipment(shipment)
+    return if adjustments.blank?
+
+    RemoveSpartaDiscountService.destroy_shipment_spl_adjustments(shipment, order)
+  end
+
+  def spl_adjustments_for_shipment(shipment)
+    shipment.adjustments.where('preferences LIKE ?', "%:external_source_type: #{SPL_SOURCE_TYPE}%")
+  end
+
+  def sync_spl_adjustments_for_shipment(shipment, discounts)
+    existing = spl_adjustments_for_shipment(shipment).to_a
+    wanted_names = discounts.pluck(:external_name)
+
+    stale = existing.reject { |adjustment| wanted_names.include?(adjustment.preferred_external_name) }
+    if stale.any?
+      shipment.adjustments.where(id: stale.map(&:id)).destroy_all
+      ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+    end
+
+    discounts.each do |discount|
+      adjustment = existing.find do |existing_adjustment|
+        !existing_adjustment.destroyed? && existing_adjustment.preferred_external_name == discount[:external_name]
+      end
+
+      if adjustment
+        if adjustment.amount != discount[:amount] || adjustment.label != discount[:label]
+          adjustment.update(amount: discount[:amount], label: discount[:label])
+          ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+        end
+      else
+        shipment.adjustments.create(
+          adjustable: shipment,
+          amount: discount[:amount],
+          included: false,
+          label: discount[:label],
+          order: order,
+          preferred_external_source_type: SPL_SOURCE_TYPE,
+          preferred_trade_agreement_number: discount[:trade_agreement_number],
+          preferred_external_name: discount[:external_name]
+        )
+        ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+      end
+    end
+
+    order.updater.update
   end
 end

@@ -12,7 +12,7 @@ class ApplySpartaDiscountService
 
   def call
     return unless response_valid?
-    return ApplySpartaMultiCouponDiscountService.new(response, order).call if Spree::Spl.config.multi_coupon_adjustments
+    return ApplySpartaMultiCouponDiscountService.new(response, order).call if ::Spree::Spl.config.multi_coupon_adjustments
 
     apply_legacy_adjustments
   end
