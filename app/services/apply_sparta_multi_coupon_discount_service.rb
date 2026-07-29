@@ -2,7 +2,7 @@
 
 # Opt-in multi-coupon path (Spree::Spl.config.multi_coupon_adjustments = true).
 # Default ApplySpartaDiscountService keeps the legacy single-adjustment behaviour.
-class ApplySpartaMultiCouponDiscountService
+class ApplySpartaMultiCouponDiscountService # rubocop:disable Metrics/ClassLength
   SPL_SOURCE_TYPE = 'SPL'
 
   def initialize(response, order)
@@ -122,20 +122,21 @@ class ApplySpartaMultiCouponDiscountService
     shipping_item = basket.find { |item| Spl::ShippingBasketLine.shipping_pos?(item['pos']) }
     discounts = sparta_discounts_for(shipping_item)
 
-    unless shipment
-      return if discounts.empty?
-
-      Rails.logger.info(
-        "[SPL] Shipping discounts returned but order #{order.id} has no shipment yet; skipping apply"
-      )
-      return
-    end
+    return log_missing_shipment(discounts) unless shipment
 
     if discounts.empty?
       clear_spl_adjustments_for_shipment(shipment)
     else
       sync_spl_adjustments_for_shipment(shipment, discounts)
     end
+  end
+
+  def log_missing_shipment(discounts)
+    return if discounts.empty?
+
+    Rails.logger.info(
+      "[SPL] Shipping discounts returned but order #{order.id} has no shipment yet; skipping apply"
+    )
   end
 
   def clear_spl_adjustments_for_shipment(shipment)
@@ -154,36 +155,51 @@ class ApplySpartaMultiCouponDiscountService
     wanted_names = discounts.pluck(:external_name)
 
     stale = existing.reject { |adjustment| wanted_names.include?(adjustment.preferred_external_name) }
-    if stale.any?
-      shipment.adjustments.where(id: stale.map(&:id)).destroy_all
-      ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
-    end
+    remove_stale_shipment_adjustments(shipment, stale)
 
     discounts.each do |discount|
-      adjustment = existing.find do |existing_adjustment|
-        !existing_adjustment.destroyed? && existing_adjustment.preferred_external_name == discount[:external_name]
-      end
-
+      adjustment = find_shipment_adjustment(existing, discount[:external_name])
       if adjustment
-        if adjustment.amount != discount[:amount] || adjustment.label != discount[:label]
-          adjustment.update(amount: discount[:amount], label: discount[:label])
-          ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
-        end
+        update_spl_shipment_adjustment(adjustment, discount, shipment)
       else
-        shipment.adjustments.create(
-          adjustable: shipment,
-          amount: discount[:amount],
-          included: false,
-          label: discount[:label],
-          order: order,
-          preferred_external_source_type: SPL_SOURCE_TYPE,
-          preferred_trade_agreement_number: discount[:trade_agreement_number],
-          preferred_external_name: discount[:external_name]
-        )
-        ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+        create_spl_shipment_adjustment(shipment, discount)
       end
     end
 
     order.updater.update
+  end
+
+  def find_shipment_adjustment(existing, external_name)
+    existing.find do |adjustment|
+      !adjustment.destroyed? && adjustment.preferred_external_name == external_name
+    end
+  end
+
+  def remove_stale_shipment_adjustments(shipment, stale)
+    return if stale.empty?
+
+    shipment.adjustments.where(id: stale.map(&:id)).destroy_all
+    ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+  end
+
+  def update_spl_shipment_adjustment(adjustment, discount, shipment)
+    return if adjustment.amount == discount[:amount] && adjustment.label == discount[:label]
+
+    adjustment.update(amount: discount[:amount], label: discount[:label])
+    ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+  end
+
+  def create_spl_shipment_adjustment(shipment, discount)
+    shipment.adjustments.create(
+      adjustable: shipment,
+      amount: discount[:amount],
+      included: false,
+      label: discount[:label],
+      order: order,
+      preferred_external_source_type: SPL_SOURCE_TYPE,
+      preferred_trade_agreement_number: discount[:trade_agreement_number],
+      preferred_external_name: discount[:external_name]
+    )
+    ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
   end
 end

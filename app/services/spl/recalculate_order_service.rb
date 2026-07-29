@@ -46,21 +46,21 @@ module Spl
     end
 
     def basket_fingerprint
-      items = @order.line_items.order(:id).map do |line_item|
-        [line_item.id, line_item.variant_id, line_item.quantity, line_item.amount.to_d]
-      end
-
-      card_state = @order.public_metadata.slice('spl_no_card', 'spl_card_active')
-      coupon_version = @order.private_metadata['spl_coupon_version']
-      fingerprint_parts = [items, card_state, coupon_version]
-      if ::Spree::Spl.config.manual_discount_codes?
-        fingerprint_parts << ManualCoupons.for_order(@order)
-      end
-      if ShippingBasketLine.enabled?
-        fingerprint_parts << ShippingBasketLine.amount_for(@order)
-      end
+      fingerprint_parts = [
+        line_item_fingerprint_parts,
+        @order.public_metadata.slice('spl_no_card', 'spl_card_active'),
+        @order.private_metadata['spl_coupon_version']
+      ]
+      fingerprint_parts << ManualCoupons.for_order(@order) if ::Spree::Spl.config.manual_discount_codes?
+      fingerprint_parts << ShippingBasketLine.amount_for(@order) if ShippingBasketLine.enabled?
 
       Digest::SHA256.hexdigest(fingerprint_parts.to_json)
+    end
+
+    def line_item_fingerprint_parts
+      @order.line_items.order(:id).map do |line_item|
+        [line_item.id, line_item.variant_id, line_item.quantity, line_item.amount.to_d]
+      end
     end
 
     def stored_fingerprint

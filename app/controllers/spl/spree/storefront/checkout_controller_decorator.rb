@@ -3,7 +3,7 @@
 module Spl
   module Spree
     module Storefront
-      module CheckoutControllerDecorator
+      module CheckoutControllerDecorator # rubocop:disable Metrics/ModuleLength
         include ErrorHandlingHelper
         include BooleanHelper
 

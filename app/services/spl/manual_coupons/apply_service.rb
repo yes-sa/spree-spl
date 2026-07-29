@@ -17,9 +17,7 @@ module Spl
       end
 
       def call
-        unless ::Spree::Spl.config.manual_discount_codes?
-          return failure(nil, 'disabled')
-        end
+        return failure(nil, 'disabled') unless ::Spree::Spl.config.manual_discount_codes?
 
         normalized = ManualCoupons.normalize(@code)
         return failure(normalized, 'blank') if normalized.blank?
@@ -28,16 +26,8 @@ module Spl
         ManualCoupons.replace!(@order, normalized)
         recalculate!
 
-        coupon_result = ManualCoupons.result_for(@order.reload, normalized)
-        if coupon_result.present? && false?(coupon_result['valid'] || coupon_result[:valid])
-          ManualCoupons.remove!(@order, normalized)
-          recalculate!
-          return failure(
-            normalized,
-            'not_valid',
-            Array(coupon_result['nonValidReasons'] || coupon_result[:nonValidReasons])
-          )
-        end
+        invalid = reject_invalid_coupon(normalized)
+        return invalid if invalid
 
         # SPL may omit coupons[] for some codes that still apply as basket discounts.
         # Keep the code when sale succeeded and no explicit invalid flag was returned.
@@ -45,6 +35,18 @@ module Spl
       end
 
       private
+
+      def reject_invalid_coupon(normalized)
+        coupon_result = ManualCoupons.result_for(@order.reload, normalized)
+        return if coupon_result.blank?
+
+        result = coupon_result.stringify_keys
+        return unless false?(result['valid'])
+
+        ManualCoupons.remove!(@order, normalized)
+        recalculate!
+        failure(normalized, 'not_valid', Array(result['nonValidReasons']))
+      end
 
       def recalculate!
         RemoveSpartaDiscountService.destroy_all_sparta_adjustments(@order)
