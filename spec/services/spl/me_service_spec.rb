@@ -159,5 +159,51 @@ RSpec.describe Spl::MeService, type: :service do
           .to raise_error(Spl::MeService::SplMeError, error_response_hash.to_s)
       end
     end
+
+    context 'when the access token has expired' do
+      let(:user) do
+        create(:user, private_metadata: {
+                 'spl_access_token' => 'expired-access-token',
+                 'spl_refresh_token' => 'refresh-token-123',
+                 'unrelated_key' => 'preserved-value'
+               })
+      end
+      let(:expired_response) do
+        { 'errorCode' => 'TOKEN_EXPIRED', 'msg' => 'Token expired' }
+      end
+      let(:success_response) do
+        { 'errorCode' => '0', 'response' => { 'person' => {} }, 'msg' => 'OK' }
+      end
+      let(:oauth_service) { instance_double(Spl::OauthTokenService) }
+
+      before do
+        responses = [
+          double('Response', body: expired_response.to_json),
+          double('Response', body: success_response.to_json)
+        ]
+        request_service = instance_double(Spl::SendRequestService)
+
+        allow(Spl::SendRequestService).to receive(:new).and_return(request_service)
+        allow(request_service).to receive(:call).and_return(*responses)
+        allow(Spl::OauthTokenService).to receive(:new).with(kind_of(DateTime), store).and_return(oauth_service)
+        allow(oauth_service).to receive(:refresh_token).with('refresh-token-123').and_return(
+          'accessToken' => 'refreshed-access-token',
+          'refreshToken' => 'refreshed-refresh-token'
+        )
+      end
+
+      it 'refreshes the tokens, preserves metadata and retries the request' do
+        expect(service.call).to eq(success_response)
+        expect(user.reload.private_metadata).to include(
+          'spl_access_token' => 'refreshed-access-token',
+          'spl_refresh_token' => 'refreshed-refresh-token',
+          'unrelated_key' => 'preserved-value'
+        )
+        expect(Spl::SendRequestService).to have_received(:new).with(
+          URI.parse(me_url),
+          context: { prgCode: 'PRG001', oauthToken: 'refreshed-access-token' }
+        )
+      end
+    end
   end
 end
