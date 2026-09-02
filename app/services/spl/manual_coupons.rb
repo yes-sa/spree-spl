@@ -6,7 +6,7 @@ module Spl
   module ManualCoupons
     METADATA_KEY = 'spl_manual_coupons'
     LAST_RESULTS_KEY = 'spl_last_sale_coupons'
-    CODE_FORMAT = /\A[A-Z0-9]+\z/
+    CODE_FORMAT = /\A[A-Z0-9]+(?: [A-Z0-9]+)*\z/
 
     module_function
 
@@ -15,7 +15,7 @@ module Spl
     end
 
     def normalize(code)
-      code.to_s.strip.upcase.presence
+      code.to_s.squish.upcase.presence
     end
 
     def valid_format?(code)

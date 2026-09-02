@@ -156,6 +156,7 @@ module Spl
 
         def skip_promotion_switcher?
           action = action_name.to_sym
+          return true if action == :complete
           return true if DISCOUNT_CODE_ACTIONS.include?(action)
           return true if LOYALTY_COUPON_ACTIONS.include?(action) && ::Spree::Spl.config.reprice_on_coupon_change
 
@@ -167,7 +168,11 @@ module Spl
         end
 
         def checkout_state_allowed?
-          %w[cart address delivery payment].include?(request.path.split('/').last)
+          !final_confirm_submission?
+        end
+
+        def final_confirm_submission?
+          action_name == 'update' && params[:state].to_s == 'confirm' && @order&.confirm?
         end
 
         def perform_update_sparta_state_job

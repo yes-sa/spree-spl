@@ -14,6 +14,10 @@ RSpec.describe Spl::Spree::Storefront::CheckoutControllerDecorator, type: :contr
       render plain: 'ok'
     end
 
+    def update
+      render plain: 'ok'
+    end
+
     # Provided by decorator; defined here so Rails can dispatch
 
     private
@@ -26,7 +30,8 @@ RSpec.describe Spl::Spree::Storefront::CheckoutControllerDecorator, type: :contr
   before do
     controller.class.prepend described_class
     routes.draw do
-      get  '/checkout', to: 'anonymous#show'
+      get '/checkout', to: 'anonymous#show'
+      patch '/checkout/confirm', to: 'anonymous#update'
       post '/checkout/activate_coupon', to: 'anonymous#activate_coupon'
       post '/checkout/deactivate_coupon', to: 'anonymous#deactivate_coupon'
     end
@@ -44,9 +49,9 @@ RSpec.describe Spl::Spree::Storefront::CheckoutControllerDecorator, type: :contr
   end
 
   describe '#promotion_switcher' do
-    it "calls PromotionSwitcherService with confirm=false when URL does not include 'confirm'" do
+    it 'uses check_only=true before the final confirmation' do
       switcher = instance_double('PromotionSwitcherService', call: true)
-      expect(PromotionSwitcherService).to receive(:new).with(order, false).and_return(switcher)
+      expect(PromotionSwitcherService).to receive(:new).with(order, true).and_return(switcher)
 
       allow(Spl::Coupons::GetCouponsService)
         .to receive(:new).with(user, store)
@@ -56,19 +61,32 @@ RSpec.describe Spl::Spree::Storefront::CheckoutControllerDecorator, type: :contr
       expect(response).to have_http_status(:ok)
     end
 
-    it "calls PromotionSwitcherService with confirm=true when URL includes 'confirm'" do
+    it 'uses check_only=true while rendering the confirmation page' do
       allow_any_instance_of(ActionDispatch::Request)
         .to receive(:url)
         .and_return('http://test.host/checkout/confirm')
 
       switcher = instance_double('PromotionSwitcherService', call: false)
-      expect(PromotionSwitcherService).to receive(:new).with(order, false).and_return(switcher)
+      expect(PromotionSwitcherService).to receive(:new).with(order, true).and_return(switcher)
 
       allow(Spl::Coupons::GetCouponsService)
         .to receive(:new).with(user, store)
                          .and_return(instance_double('Spl::Coupons::GetCouponsService', call: []))
 
       get :show
+      expect(response).to have_http_status(:ok)
+    end
+
+    it 'uses check_only=false only when the confirmed order is submitted' do
+      order.update!(state: 'confirm')
+      switcher = instance_double('PromotionSwitcherService', call: true)
+      expect(PromotionSwitcherService).to receive(:new).with(order, false).and_return(switcher)
+
+      allow(Spl::Coupons::GetCouponsService)
+        .to receive(:new).with(user, store)
+                         .and_return(instance_double('Spl::Coupons::GetCouponsService', call: []))
+
+      patch :update, params: { state: 'confirm' }
       expect(response).to have_http_status(:ok)
     end
   end

@@ -40,6 +40,20 @@ RSpec.describe Spl::ManualCoupons::ApplyService do
     expect(recalculator).to have_received(:call)
   end
 
+  it 'accepts and normalizes a multi-word marketing code' do
+    allow(RemoveSpartaDiscountService).to receive(:destroy_all_sparta_adjustments)
+    allow(Spl::RecalculateOrderService).to receive(:bump_coupon_version!)
+    allow(Spl::RecalculateOrderService).to receive(:new).and_return(
+      instance_double(Spl::RecalculateOrderService, call: order)
+    )
+
+    result = described_class.new(order, '  promocja   jesienna  ').call
+
+    expect(result).to be_success
+    expect(result.code).to eq('PROMOCJA JESIENNA')
+    expect(Spl::ManualCoupons.for_order(order.reload)).to eq(['PROMOCJA JESIENNA'])
+  end
+
   it 'removes code when SPL marks it invalid' do
     allow(RemoveSpartaDiscountService).to receive(:destroy_all_sparta_adjustments)
     recalculator = instance_double(Spl::RecalculateOrderService, call: order)
