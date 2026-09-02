@@ -16,7 +16,7 @@ class PromotionSwitcherService
   end
 
   def call
-    if Spree::Spl.config.promotion_switcher_status_result
+    if ::Spree::Spl.config.promotion_switcher_status_result
       call_with_status
     else
       call_legacy
@@ -62,19 +62,37 @@ class PromotionSwitcherService
   def apply_sparta_discount(order, check_only)
     return unless order.line_items.any?
 
-    card_number = prepare_card_number_if_exist(order.public_metadata)
-    spl_response = Spl::SpartaLoyaltyService.new(
+    spl_response = request_sparta_discount(order, check_only)
+    return unless spl_response
+
+    store_manual_coupon_results(order, spl_response)
+    create_sparta_adjustments(spl_response, order)
+  end
+
+  def request_sparta_discount(order, check_only)
+    Spl::SpartaLoyaltyService.new(
       spl_transaction_no(order),
-      card_number,
+      prepare_card_number_if_exist(order.public_metadata),
       order.line_items,
       DateTime.current,
       order.products,
       check_only,
-      order.store
+      order.store,
+      coupons: manual_coupons_for(order),
+      shipping_amount: Spl::ShippingBasketLine.amount_for(order)
     ).call
-    return unless spl_response
+  end
 
-    create_sparta_adjustments(spl_response, order)
+  def manual_coupons_for(order)
+    return [] unless ::Spree::Spl.config.manual_discount_codes?
+
+    Spl::ManualCoupons.for_order(order)
+  end
+
+  def store_manual_coupon_results(order, spl_response)
+    return unless ::Spree::Spl.config.manual_discount_codes?
+
+    Spl::ManualCoupons.store_sale_results!(order, spl_response.dig('response', 'coupons'))
   end
 
   def create_sparta_adjustments(spl_response, order)

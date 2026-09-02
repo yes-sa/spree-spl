@@ -1,0 +1,4 @@
+<%# Host apps can override this template %>
+<%= turbo_stream.replace "checkout-summary" do %>
+  <%= render partial: "spree/shared/order_summary", locals: { order: @order } if lookup_context.exists?("spree/shared/_order_summary", [], true) %>
+<% end %>

@@ -19,10 +19,11 @@ class UpdateSpartaStateJob < ActiveJob::Base # rubocop:disable Metrics/ClassLeng
     date = DateTime.parse(transaction['date'])
     card_number = transaction['cardNo']
     basket = transaction['basket']
+    coupons = transaction['coupons']
 
     case state
     when 'D'
-      update_order_status(order_token, basket, date, card_number, store, order_number)
+      update_order_status(order_token, basket, date, card_number, store, order_number, coupons)
     when 'C'
       refund(order_token, basket, date, store, card_number)
     end
@@ -44,8 +45,8 @@ class UpdateSpartaStateJob < ActiveJob::Base # rubocop:disable Metrics/ClassLeng
     JSON.parse(response.body) if response.is_a?(Net::HTTPSuccess)
   end
 
-  def update_order_status(order_token, basket, date, card_number, store, order_number = '')
-    body = build_body(order_token, basket, date, card_number, order_number, store)
+  def update_order_status(order_token, basket, date, card_number, store, order_number = '', coupons = [])
+    body = build_body(order_token, basket, date, card_number, order_number, store, coupons)
     sale_url = URI.parse(Spl::UrlCreatorService.new(store.private_metadata['spl_url']).sale)
     response_body = send_request(sale_url, body)
     handle_response(response_body)
@@ -65,7 +66,7 @@ class UpdateSpartaStateJob < ActiveJob::Base # rubocop:disable Metrics/ClassLeng
     handle_response(response_body)
   end
 
-  def build_body(order_token, basket, date, card_number, order_number, store) # rubocop:disable Metrics/MethodLength
+  def build_body(order_token, basket, date, card_number, order_number, store, coupons) # rubocop:disable Metrics/MethodLength
     date_in_ms = date.to_i * 1000
     {
       ver: 4,
@@ -80,6 +81,7 @@ class UpdateSpartaStateJob < ActiveJob::Base # rubocop:disable Metrics/ClassLeng
       cardNo: card_number,
       documentNo: order_number,
       basket: basket,
+      coupons: coupon_codes(coupons),
       signature: generate_signature(order_token, store, date_in_ms, card_number, order_number)
     }
   end
@@ -136,5 +138,15 @@ class UpdateSpartaStateJob < ActiveJob::Base # rubocop:disable Metrics/ClassLeng
     raise StandardError, response_body.inspect unless response_body.present? && response_body['errorCode'] == '0'
 
     Rails.logger.debug response_body.inspect
+  end
+
+  def coupon_codes(coupons)
+    Array(coupons).filter_map do |coupon|
+      if coupon.is_a?(Hash)
+        coupon['code'] || coupon[:code]
+      else
+        coupon
+      end
+    end
   end
 end
