@@ -79,7 +79,6 @@ class PromotionSwitcherService
     ApplySpartaDiscountService.new(spl_response, order).call
   end
 
-  # An inactive card contributes no number; a missing one stays nil (legacy).
   def prepare_card_number_if_exist(order)
     ::Spl::Metafields.card_active?(order) ? ::Spl::Metafields.card_number(order) : ''
   end

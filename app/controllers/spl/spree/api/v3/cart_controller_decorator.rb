@@ -7,8 +7,6 @@ module Spl
         module CartControllerDecorator
           include BooleanHelper
 
-          # The card used to be merged into the create params; a metafield needs
-          # the cart to exist, so it is stamped on right after `super` instead.
           def create
             super
 

@@ -120,10 +120,6 @@ module Spl
         end
         # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockNesting
 
-        # The action used to assign the submitted card straight to the user;
-        # it lives on metafields now, so it is written here instead - still
-        # after the update, and still clearing whatever the submitted hash
-        # left out, exactly as assigning the whole column did.
         def update
           super
 
@@ -132,9 +128,6 @@ module Spl
 
         private
 
-        # Read straight off `params`: `spl` is deliberately not among the
-        # permitted user attributes, because the card is stored on metafields
-        # rather than on the user record.
         def spl_card_params
           params[:user]&.[](:spl)
         end
@@ -187,9 +180,7 @@ module Spl
 
           ::Spl::Metafields.set_card_number(try_spree_current_user, metadata[:card_number])
           ::Spl::Metafields.set_card_active(try_spree_current_user, metadata[:card_active])
-          # The terms consent was never part of what a profile update submits,
-          # so assigning the whole column always dropped it. Reproduced on
-          # purpose - delete this line if the consent should survive.
+          # A profile update never submits the consent, and wiping it is the legacy behaviour.
           ::Spl::Metafields.set_accept_terms(try_spree_current_user, nil)
         end
 

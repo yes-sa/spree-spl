@@ -1,15 +1,6 @@
 # frozen_string_literal: true
 
 module Spl
-  # Single entry point for the loyalty data SPL keeps on Spree metafields.
-  #
-  #   spl.card_number           ShortText   Spree::Order, user
-  #   spl.card_active           Boolean     Spree::Order, user
-  #   consent.accept_spl_terms  Boolean     user
-  #
-  # Nothing here reads `public_metadata`. `rake spl:backfill_metafields` moves
-  # the legacy keys onto these metafields and is the only place that still
-  # knows they ever existed, so it has to run before the gem is deployed.
   class Metafields
     CARD_NUMBER = 'spl.card_number'
     CARD_ACTIVE = 'spl.card_active'
@@ -34,7 +25,6 @@ module Spl
         write(resource, CARD_NUMBER, value.presence&.to_s)
       end
 
-      # true, false, or nil when the card state was never set on the resource.
       def card_active(resource)
         read(resource, CARD_ACTIVE)
       end
@@ -51,7 +41,6 @@ module Spl
         write(resource, CARD_ACTIVE, value)
       end
 
-      # true, false, or nil when the consent was never recorded.
       def accept_terms(resource)
         read(resource, ACCEPT_TERMS)
       end
@@ -64,8 +53,6 @@ module Spl
         write(resource, ACCEPT_TERMS, value)
       end
 
-      # The user a card belongs to, looked up in SQL - never by loading every
-      # user into memory.
       def user_with_card_number(card_number)
         return if card_number.blank?
 
@@ -97,9 +84,7 @@ module Spl
         except&.id ? scope.where.not(id: except.id) : scope
       end
 
-      # `value` is the raw text column, so a Boolean metafield reads back as
-      # "true" / "false"; `serialize_value` is the typed subclass's own
-      # deserialization and hands back a real boolean.
+      # `serialize_value`, not `value`: the column is text, so a Boolean reads back as "true".
       def read(resource, full_key)
         metafield_for(resource, full_key)&.serialize_value
       end
@@ -123,8 +108,6 @@ module Spl
         if value.nil?
           record.destroy! if record.persisted?
         else
-          # The typed subclass normalizes on assignment, so a Boolean metafield
-          # coerces 'true' / true / '1' to its canonical "true" by itself.
           record.value = value
           record.save! if record.changed?
         end

@@ -11,10 +11,6 @@ module Spl
             base.before_action :validate_spl_no_card, only: :update
           end
 
-          # Spree persisted the submitted card along with the rest of the
-          # metadata column; it lives on metafields now, so it is written here
-          # instead - still after the update, and still clearing whatever the
-          # submitted hash left out.
           def update
             super
 
@@ -61,9 +57,6 @@ module Spl
 
           private
 
-          # Read straight off `params`: `spl` is deliberately not among the
-          # permitted attributes, because the card is stored on metafields
-          # rather than on the customer record.
           def spl_card_params
             params[:spl]
           end

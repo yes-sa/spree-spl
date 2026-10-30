@@ -12,9 +12,6 @@ namespace :spl do
   end
 end
 
-# The only place that still knows the legacy `public_metadata` keys. Each record
-# gets its metafields written and the legacy keys dropped in one pass, so the
-# task is safe to re-run and leaves nothing for the gem to read.
 module SplMetafieldsBackfill
   CARD_NUMBER = 'spl_no_card'
   CARD_ACTIVE = 'spl_card_active'
@@ -59,8 +56,7 @@ module SplMetafieldsBackfill
       scope.find_each do |record|
         metadata = record.public_metadata.to_h
         yield(record, metadata)
-        # update_column on purpose: dropping the migrated keys must not fire
-        # order callbacks or touch timestamps.
+        # update_column on purpose: dropping the keys must not fire callbacks or touch timestamps.
         record.update_column(:public_metadata, metadata.except(*keys)) # rubocop:disable Rails/SkipsModelValidations
       end
     end

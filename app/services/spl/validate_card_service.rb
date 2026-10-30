@@ -19,8 +19,6 @@ module Spl
       return if ::Spl::Metafields.card_number(@user).nil?
 
       spl_card_active = ::Spl::Metafields.card_active(@user)
-      # A metafield cannot be mutated in place and left unsaved, so the
-      # deactivation is held here and flushed on the way out instead.
       @card_active = false
 
       response_body = JSON.parse(verify_card_request)

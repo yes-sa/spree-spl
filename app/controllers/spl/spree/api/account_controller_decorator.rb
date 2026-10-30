@@ -11,10 +11,6 @@ module Spl
           base.before_action :validate_spl_no_card, only: :update
         end
 
-        # The update service assigned the submitted card straight to the user;
-        # it lives on metafields now, so it is written here instead - still
-        # after the update, and still clearing whatever the submitted hash
-        # left out.
         def update
           super
 
@@ -61,9 +57,6 @@ module Spl
 
         private
 
-        # Read straight off `params`: `spl` is deliberately not among the
-        # permitted user attributes, because the card is stored on metafields
-        # rather than on the user record.
         def spl_card_params
           params[:user]&.[](:spl)
         end
