@@ -57,7 +57,7 @@ module Spl
     end
 
     def prepare_registration_body(access_token) # rubocop:disable Metrics/MethodLength
-      accept_yc_terms = @user.public_metadata['accept_yc_terms']
+      accept_yc_terms = ::Spl::Metafields.accept_terms(@user)
       {
         context: {
           oauthToken: access_token,
@@ -83,7 +83,8 @@ module Spl
     # Only save the card number — NOT the anonymous tokens.
     # User-scoped tokens are saved by LoginAccountService after a successful session upgrade.
     def save_card_number(card_number)
-      @user.update(public_metadata: @user.public_metadata.merge(spl_no_card: card_number, spl_card_active: true))
+      ::Spl::Metafields.set_card_number(@user, card_number)
+      ::Spl::Metafields.set_card_active(@user, true)
     end
   end
 end

@@ -19,7 +19,7 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
     let(:params) do
       {
         'user' => {
-          'public_metadata' => {
+          'spl' => {
             'mobile_country' => '+48',
             'phone_number' => '123345125',
             'card_number' => '0123456789123',
@@ -101,7 +101,7 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
     let(:params) do
       {
         'user' => {
-          'public_metadata' => {
+          'spl' => {
             'mobile_country' => '+48',
             'phone_number' => '123345125',
             'splAuthCode' => 'BVSMWX8YYTH98SZAVHYEZJZC7PYPKS',
@@ -329,10 +329,10 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
     end
     let(:service) { instance_double(Spl::ValidateCardService, call: true) }
 
-    it 'does nothing when metadata is missing' do
+    it 'does nothing when the spl params are missing' do
       expect(Spl::ValidateCardService).not_to receive(:new)
 
-      patch :update, params: { metadata: {} }, as: :json
+      patch :update, params: { spl: {} }, as: :json
       expect(response).not_to have_http_status(:bad_request)
     end
 
@@ -340,7 +340,7 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
       expect(Spl::ValidateCardService).not_to receive(:new)
 
       patch :update,
-            params: { metadata: { spl_card_active: false, spl_no_card: '0123456789123' } },
+            params: { spl: { card_active: false, card_number: '0123456789123' } },
             as: :json
 
       expect(response).not_to have_http_status(:bad_request)
@@ -350,7 +350,7 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
       expect(Spl::ValidateCardService).not_to receive(:new)
 
       patch :update,
-            params: { metadata: { spl_card_active: false, spl_no_card: '' } },
+            params: { spl: { card_active: false, card_number: '' } },
             as: :json
 
       expect(response).not_to have_http_status(:bad_request)
@@ -363,14 +363,14 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
       expect(service).to receive(:call)
 
       patch :update,
-            params: { metadata: { spl_no_card: '0123456789123' } },
+            params: { spl: { card_number: '0123456789123' } },
             as: :json
 
       expect(response).to have_http_status(:ok)
     end
 
     it 'renders 400 and updates the last order when validation fails' do
-      order = create(:order, user: user, state: 'cart', public_metadata: {})
+      order = create(:order, user: user, state: 'cart')
 
       allow(Spl::ValidateCardService).to receive(:new).and_return(service)
       allow(service).to receive(:call).and_raise(
@@ -378,15 +378,27 @@ RSpec.describe Spree::Api::V3::Store::CustomersController, type: :controller do
       )
 
       patch :update,
-            params: { metadata: { spl_no_card: 'BAD' } },
+            params: { spl: { card_number: 'BAD' } },
             as: :json
 
       expect(response).to have_http_status(:bad_request)
       expect(response.parsed_body).to eq('error' => 'Invalid SPL card')
 
       order.reload
-      expect(order.public_metadata['spl_no_card']).to be_nil
-      expect(order.public_metadata['spl_card_active']).to eq(false)
+      expect(Spl::Metafields.card_number(order)).to be_nil
+      expect(Spl::Metafields.card_active(order)).to be(false)
+    end
+
+    it 'stores the card on metafields and leaves the metadata column to Spree' do
+      allow(Spl::ValidateCardService).to receive(:new).and_return(service)
+
+      patch :update,
+            params: { spl: { card_number: '0123456789123', card_active: true } },
+            as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(Spl::Metafields.card_number(user)).to eq('0123456789123')
+      expect(Spl::Metafields.card_active(user)).to be(true)
     end
   end
 end

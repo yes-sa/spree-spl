@@ -120,13 +120,30 @@ module Spl
         end
         # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/BlockNesting
 
+        # The action used to assign the submitted card straight to the user;
+        # it lives on metafields now, so it is written here instead - still
+        # after the update, and still clearing whatever the submitted hash
+        # left out, exactly as assigning the whole column did.
+        def update
+          super
+
+          sync_spl_metafields if try_spree_current_user.errors.empty?
+        end
+
         private
 
-        def validate_spl_no_card
-          metadata = user_params[:public_metadata]
-          return unless metadata&.[](:spl_no_card)
+        # Read straight off `params`: `spl` is deliberately not among the
+        # permitted user attributes, because the card is stored on metafields
+        # rather than on the user record.
+        def spl_card_params
+          params[:user]&.[](:spl)
+        end
 
-          update_order(metadata[:spl_no_card], metadata[:spl_card_active])
+        def validate_spl_no_card
+          metadata = spl_card_params
+          return unless metadata&.[](:card_number)
+
+          update_order(metadata[:card_number], metadata[:card_active])
           validate_card(metadata)
         rescue ::Spl::ValidateCardService::SplCardValidationError => e
           handle_validation_error(e)
@@ -148,7 +165,7 @@ module Spl
         def validate_card(metadata)
           return unless disactivated_card?
 
-          ::Spl::ValidateCardService.new(metadata[:spl_no_card], try_spree_current_user, current_store).call
+          ::Spl::ValidateCardService.new(metadata[:card_number], try_spree_current_user, current_store).call
         end
 
         def handle_validation_error(error)
@@ -160,19 +177,24 @@ module Spl
           return if current_order.nil?
           return unless %w[cart address delivery payment].include?(current_order.state)
 
-          current_order.update(
-            public_metadata: current_order.public_metadata.merge(
-              {
-                'spl_no_card' => spl_card,
-                'spl_card_active' => active
-              }
-            )
-          )
+          ::Spl::Metafields.set_card_number(current_order, spl_card)
+          ::Spl::Metafields.set_card_active(current_order, active)
+        end
+
+        def sync_spl_metafields
+          metadata = spl_card_params
+          return if metadata.nil?
+
+          ::Spl::Metafields.set_card_number(try_spree_current_user, metadata[:card_number])
+          ::Spl::Metafields.set_card_active(try_spree_current_user, metadata[:card_active])
+          # The terms consent was never part of what a profile update submits,
+          # so assigning the whole column always dropped it. Reproduced on
+          # purpose - delete this line if the consent should survive.
+          ::Spl::Metafields.set_accept_terms(try_spree_current_user, nil)
         end
 
         def disactivated_card?
-          value = user_params.dig(:public_metadata, :spl_card_active)
-          cast_boolean(value)
+          cast_boolean(spl_card_params&.[](:card_active))
         end
 
         def validate_yc_terms
@@ -188,7 +210,7 @@ module Spl
         end
 
         def yc_terms_accepted?
-          cast_boolean(login_code_params[:accept_yc_terms])
+          cast_boolean(login_code_params[:accept_spl_terms])
         end
 
         def phone_parser
@@ -200,10 +222,8 @@ module Spl
         end
 
         def update_user_after_otp_request
-          try_spree_current_user.update(
-            phone: login_code_params[:phone],
-            public_metadata: (try_spree_current_user.public_metadata || {}).merge('accept_yc_terms' => true)
-          )
+          try_spree_current_user.update(phone: login_code_params[:phone])
+          ::Spl::Metafields.set_accept_terms(try_spree_current_user, true)
         end
 
         def assign_card_number(user, store, params)
@@ -212,12 +232,11 @@ module Spl
         end
 
         def login_code_params
-          params.require(:user).permit(:phone, :accept_yc_terms)
+          params.require(:user).permit(:phone, :accept_spl_terms)
         end
 
         def user_params
-          params.require(:user).permit(:first_name, :last_name, :phone, :email,
-                                       public_metadata: %i[spl_card_active spl_no_card])
+          params.require(:user).permit(:first_name, :last_name, :phone, :email)
         end
 
         def safe_redirect_url(redirect_param, default_path)

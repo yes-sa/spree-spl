@@ -11,6 +11,16 @@ module Spl
           base.before_action :validate_spl_no_card, only: :update
         end
 
+        # The update service assigned the submitted card straight to the user;
+        # it lives on metafields now, so it is written here instead - still
+        # after the update, and still clearing whatever the submitted hash
+        # left out.
+        def update
+          super
+
+          sync_spl_metafields if response.successful?
+        end
+
         def connect_loyalty_account
           spree_authorize! :update, spree_current_user
           assign_card_number(spree_current_user, current_store, params)
@@ -51,17 +61,24 @@ module Spl
 
         private
 
+        # Read straight off `params`: `spl` is deliberately not among the
+        # permitted user attributes, because the card is stored on metafields
+        # rather than on the user record.
+        def spl_card_params
+          params[:user]&.[](:spl)
+        end
+
         def assign_card_number(user, store, params)
           Spl::LoginAccountService.new(user, store, params).call
           AssignSpartaCardNumberService.new(user, store).call
         end
 
-        def validate_spl_no_card # rubocop:disable Metrics/AbcSize
-          return if user_update_params[:public_metadata].blank?
+        def validate_spl_no_card
+          return if spl_card_params.blank?
           return if disactivated_card?
-          return if user_update_params[:public_metadata][:spl_no_card].blank?
+          return if spl_card_params[:card_number].blank?
 
-          Spl::ValidateCardService.new(user_update_params[:public_metadata][:spl_no_card],
+          Spl::ValidateCardService.new(spl_card_params[:card_number],
                                        spree_current_user,
                                        current_store).call
         rescue Spl::ValidateCardService::SplCardValidationError => e
@@ -73,19 +90,21 @@ module Spl
           current_order = spree_current_user.orders.last
           return unless %w[cart address delivery payment].include?(current_order.state)
 
-          current_order.update(
-            public_metadata: current_order.public_metadata.merge(
-              {
-                'spl_no_card' => spl_card,
-                'spl_card_active' => active
-              }
-            )
-          )
+          Spl::Metafields.set_card_number(current_order, spl_card)
+          Spl::Metafields.set_card_active(current_order, active)
+        end
+
+        def sync_spl_metafields
+          metadata = spl_card_params
+          return if metadata.nil?
+
+          Spl::Metafields.set_card_number(spree_current_user, metadata[:card_number])
+          Spl::Metafields.set_card_active(spree_current_user, metadata[:card_active])
+          Spl::Metafields.set_accept_terms(spree_current_user, metadata[:accept_terms])
         end
 
         def disactivated_card?
-          !user_update_params.dig(:public_metadata, :spl_card_active).nil? &&
-            !user_update_params[:public_metadata][:spl_card_active]
+          !spl_card_params&.[](:card_active).nil? && !spl_card_params[:card_active]
         end
       end
     end

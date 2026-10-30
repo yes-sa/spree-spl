@@ -2,8 +2,6 @@
 
 module Spl
   class SyncOrderMetadataService
-    include BooleanHelper
-
     def initialize(order, user)
       @order = order
       @user = user
@@ -13,29 +11,20 @@ module Spl
       return unless @order&.persisted?
       return unless spl_metadata_present?
 
-      order_metadata = @order.public_metadata.to_h.stringify_keys
-      spl_no_card = user_metadata['spl_no_card']
-      spl_card_active = cast_boolean(user_metadata['spl_card_active'])
+      card_number = ::Spl::Metafields.card_number(@user)
+      card_active = ::Spl::Metafields.card_active?(@user)
 
-      return if order_metadata['spl_no_card'] == spl_no_card &&
-                cast_boolean(order_metadata['spl_card_active']) == spl_card_active
+      return if ::Spl::Metafields.card_number(@order) == card_number &&
+                ::Spl::Metafields.card_active?(@order) == card_active
 
-      @order.update!(
-        public_metadata: order_metadata.merge(
-          'spl_no_card' => spl_no_card,
-          'spl_card_active' => spl_card_active
-        )
-      )
+      ::Spl::Metafields.set_card_number(@order, card_number)
+      ::Spl::Metafields.set_card_active(@order, card_active)
     end
 
     private
 
-    def user_metadata
-      @user_metadata ||= @user.public_metadata.to_h.stringify_keys
-    end
-
     def spl_metadata_present?
-      @user && user_metadata.key?('spl_no_card') && user_metadata.key?('spl_card_active')
+      @user && ::Spl::Metafields.card_number?(@user) && ::Spl::Metafields.card_active_set?(@user)
     end
   end
 end
