@@ -32,7 +32,7 @@ module Spl
     private
 
     def prepare_registration_body(access_token) # rubocop:disable Metrics/MethodLength
-      accept_yc_terms = @user.public_metadata['accept_yc_terms']
+      accept_yc_terms = ::Spl::Metafields.accept_terms(@user)
       {
         context: {
           oauthToken: access_token,
@@ -57,11 +57,13 @@ module Spl
 
     def update_account(card_number, oauth_response_body)
       @user.private_metadata ||= {} if @user.private_metadata.blank?
-      @user.update(public_metadata: @user.public_metadata.merge(spl_no_card: card_number, spl_card_active: true),
-                   private_metadata: @user.private_metadata.merge(
-                     spl_access_token: oauth_response_body.dig('response', 'accessToken'),
-                     spl_refresh_token: oauth_response_body.dig('response', 'refreshToken')
-                   ))
+      @user.update(private_metadata: @user.private_metadata.merge(
+        spl_access_token: oauth_response_body.dig('response', 'accessToken'),
+        spl_refresh_token: oauth_response_body.dig('response', 'refreshToken')
+      ))
+
+      ::Spl::Metafields.set_card_number(@user, card_number)
+      ::Spl::Metafields.set_card_active(@user, true)
     end
   end
 end

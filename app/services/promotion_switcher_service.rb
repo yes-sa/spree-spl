@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class PromotionSwitcherService
-  include BooleanHelper
-
   def initialize(order, check_only)
     @check_only = check_only
     @line_items = order.line_items
@@ -24,7 +22,7 @@ class PromotionSwitcherService
   def apply_sparta_discount(order, check_only)
     return unless order.line_items.any?
 
-    card_number = prepare_card_number_if_exist(order.public_metadata)
+    card_number = prepare_card_number_if_exist(order)
     spl_response = Spl::SpartaLoyaltyService.new(order.token,
                                                  card_number,
                                                  order.line_items,
@@ -41,7 +39,7 @@ class PromotionSwitcherService
     ApplySpartaDiscountService.new(spl_response, order).call
   end
 
-  def prepare_card_number_if_exist(metadata)
-    cast_boolean(metadata[:spl_card_active]) ? metadata['spl_no_card'] : ''
+  def prepare_card_number_if_exist(order)
+    ::Spl::Metafields.card_active?(order) ? ::Spl::Metafields.card_number(order) : ''
   end
 end

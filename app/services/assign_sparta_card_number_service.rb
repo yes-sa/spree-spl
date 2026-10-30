@@ -27,15 +27,11 @@ class AssignSpartaCardNumberService
       raise AssignSpartaCardNumberError, I18n.t('spl.card_validation.errors.wrong_owner')
     end
 
-    @user.update(public_metadata: @user.public_metadata.merge(spl_no_card: card_data['no'],
-                                                              spl_card_active: true))
+    Spl::Metafields.set_card_number(@user, card_data['no'])
+    Spl::Metafields.set_card_active(@user, true)
   end
 
   def card_assigned_to_other_user?(card_number)
-    Spree::User.where(
-      "id != ? AND public_metadata ->> 'spl_no_card' = ?",
-      @user.id,
-      card_number
-    ).exists?
+    Spl::Metafields.card_assigned_to_other_user?(card_number, @user)
   end
 end

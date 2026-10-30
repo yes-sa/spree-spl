@@ -9,6 +9,10 @@ Rails.application.config.to_prepare do # rubocop:disable Metrics/BlockLength
     CartSerializerDecorator
   )
 
+  ::Spree::V2::Storefront::UserSerializer.prepend(
+    UserSerializerDecorator
+  )
+
   ::Spree::Api::V2::Storefront::CheckoutController.prepend(
     Spl::Spree::Api::CheckoutControllerDecorator
   )
