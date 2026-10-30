@@ -7,10 +7,12 @@ RSpec.describe Spl::ValidateCardService do
 
   let(:country) { create(:country) }
   let(:store) { create(:store, default_country: country) }
-  let(:user) { create(:user, public_metadata: { 'spl_no_card' => '1234567890123', 'spl_card_active' => true }) }
+  let(:user) { create(:user) }
   let(:card_number) { '1234567890123' }
 
   before do
+    Spl::Metafields.set_card_number(user, '1234567890123')
+    Spl::Metafields.set_card_active(user, true)
     allow(service).to receive(:verify_card_request).and_return(
       { errorCode: '0', response: { card: { status: 'A' } } }.to_json
     )
@@ -18,21 +20,19 @@ RSpec.describe Spl::ValidateCardService do
   end
 
   describe '#call' do
-    it 'temporarily disables spl_card_active during validation' do
-      original_value = user.public_metadata['spl_card_active']
+    it 'restores the card state once validation passes' do
       service.call
 
-      expect(user.public_metadata['spl_card_active']).to eq(original_value)
+      expect(Spl::Metafields.card_active(user)).to be(true)
     end
 
-    context 'when spl_card_active is nil' do
-      let(:user) { create(:user, public_metadata: { 'spl_no_card' => '1234567890123', 'spl_card_active' => nil }) }
+    context 'when the card state was never set' do
+      before { Spl::Metafields.set_card_active(user, nil) }
 
-      it 'sets spl_card_active to true after successful validation' do
+      it 'activates the card after successful validation' do
         service.call
 
-        user.reload
-        expect(user.public_metadata['spl_card_active']).to eq(true)
+        expect(Spl::Metafields.card_active(user)).to be(true)
       end
     end
 
@@ -41,11 +41,10 @@ RSpec.describe Spl::ValidateCardService do
         allow(service).to receive(:verify_card_request).and_return({ errorCode: '1', msg: 'Invalid card' }.to_json)
       end
 
-      it 'restores spl_card_active and saves user' do
+      it 'leaves the card deactivated' do
         expect { service.call }.to raise_error(Spl::ValidateCardService::SplCardValidationError)
 
-        user.reload
-        expect(user.public_metadata['spl_card_active']).to eq(false)
+        expect(Spl::Metafields.card_active(user)).to be(false)
       end
     end
 
@@ -56,7 +55,7 @@ RSpec.describe Spl::ValidateCardService do
         )
       end
 
-      it 'raises SplCardValidationError and restores spl_card_active' do
+      it 'raises SplCardValidationError and leaves the card deactivated' do
         expect do
           service.call
         end.to raise_error(
@@ -64,19 +63,17 @@ RSpec.describe Spl::ValidateCardService do
           I18n.t('spl.card_validation.errors.card_not_active')
         )
 
-        user.reload
-        expect(user.public_metadata['spl_card_active']).to eq(false)
+        expect(Spl::Metafields.card_active(user)).to be(false)
       end
     end
 
     context 'when an unexpected error occurs' do
       before { allow(service).to receive(:verify_card_request).and_raise(StandardError, 'boom') }
 
-      it 'restores spl_card_active and persists user' do
+      it 'persists the deactivated card' do
         expect { service.call }.to raise_error(StandardError)
 
-        user.reload
-        expect(user.public_metadata['spl_card_active']).to eq(false)
+        expect(Spl::Metafields.card_active(user)).to be(false)
       end
     end
   end

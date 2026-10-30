@@ -5,9 +5,15 @@ require 'rails_helper'
 RSpec.describe Spree::Promotion::Rules::UserFromClub, type: :model do
   let(:state) { create(:state, country: create(:country_us), name: 'Gdansk', abbr: 'GDA') }
   let(:store) { create(:store) }
-  let(:user) { create(:user, public_metadata: { 'spl_no_card' => '1234567890123', 'spl_card_active' => 'true' }) }
+  let(:user) { create(:user) }
+  let(:card_active) { true }
   let(:order) { create(:order_with_totals, store: store, user: user) }
   let(:rule) { described_class.new }
+
+  before do
+    Spl::Metafields.set_card_number(user, '1234567890123')
+    Spl::Metafields.set_card_active(user, card_active)
+  end
 
   describe '#applicable?' do
     it 'returns true for Spree::Order' do
@@ -25,7 +31,7 @@ RSpec.describe Spree::Promotion::Rules::UserFromClub, type: :model do
 
     before do
       allow(Spl::ValidateCardService).to receive(:new)
-        .with(user.public_metadata['spl_no_card'], user, store)
+        .with('1234567890123', user, store)
         .and_return(service_double)
     end
 
@@ -41,7 +47,7 @@ RSpec.describe Spree::Promotion::Rules::UserFromClub, type: :model do
     end
 
     context 'when card is inactive' do
-      let(:user) { create(:user, public_metadata: { 'spl_no_card' => '1234567890123', 'spl_card_active' => 'false' }) }
+      let(:card_active) { false }
 
       it 'returns false' do
         expect(rule.eligible?(order)).to be false

@@ -5,14 +5,14 @@ require 'rails_helper'
 RSpec.describe Spl::RecalculateOrderService do
   let(:country) { create(:country) }
   let(:store) { create(:store, default_country: country) }
-  let(:user) do
-    create(:user, public_metadata: { 'spl_no_card' => '5100179585157', 'spl_card_active' => 'true' })
-  end
-  let(:order) { create(:order, store: store, user: user, public_metadata: {}) }
+  let(:user) { create(:user) }
+  let(:order) { create(:order, store: store, user: user) }
   let(:metadata_sync) { instance_double(Spl::SyncOrderMetadataService, call: true) }
   let(:switcher) { instance_double(PromotionSwitcherService, call: :success) }
 
   before do
+    Spl::Metafields.set_card_number(user, '5100179585157')
+    Spl::Metafields.set_card_active(user, true)
     allow(Spl::SyncOrderMetadataService).to receive(:new).and_return(metadata_sync)
     allow(PromotionSwitcherService).to receive(:new).and_return(switcher)
     Spree::Spl.config.promotion_switcher_status_result = true
@@ -57,5 +57,15 @@ RSpec.describe Spl::RecalculateOrderService do
     described_class.new(order, user: user, store: store, force: true).call
 
     expect(switcher).to have_received(:call)
+  end
+
+  it 'changes the basket fingerprint when the card state on the order changes' do
+    create(:line_item, order: order)
+    fingerprint = described_class.new(order, user: user, store: store).send(:basket_fingerprint)
+
+    Spl::Metafields.set_card_active(order, true)
+
+    expect(described_class.new(order.reload, user: user, store: store).send(:basket_fingerprint))
+      .not_to eq(fingerprint)
   end
 end

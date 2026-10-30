@@ -25,7 +25,6 @@ RSpec.describe Spl::RegisterAccountService do
       first_name: 'John',
       last_name: 'Doe',
       email: 'john@example.com',
-      public_metadata: { 'accept_yc_terms' => true },
       private_metadata: {}
     )
   end
@@ -38,6 +37,7 @@ RSpec.describe Spl::RegisterAccountService do
   let(:send_request_service) { instance_double(Spl::SendRequestService, call: http_response) }
 
   before do
+    Spl::Metafields.set_accept_terms(user, true)
     allow(PhoneParserService).to receive(:new).and_return(phone_parser)
     allow(Spl::OauthTokenService).to receive(:new).and_return(
       instance_double(Spl::OauthTokenService, annonymus_token: oauth_response)
@@ -47,13 +47,11 @@ RSpec.describe Spl::RegisterAccountService do
 
   describe '#call' do
     context 'when registration succeeds' do
-      it 'updates user public_metadata with SPL card data' do
+      it 'stores the SPL card data on metafields' do
         service.call
 
-        expect(user.public_metadata).to include(
-          'spl_no_card' => 'CARD123',
-          'spl_card_active' => true
-        )
+        expect(Spl::Metafields.card_number(user)).to eq('CARD123')
+        expect(Spl::Metafields.card_active(user)).to be(true)
       end
 
       it 'does not save anonymous tokens to private_metadata' do
@@ -91,12 +89,15 @@ RSpec.describe Spl::RegisterAccountService do
         end.to raise_error(Spl::RegisterAccountService::SplRegisterAccountError, register_response_body.to_s)
       end
 
-      it 'does not update user public_metadata' do
-        expect do
+      it 'does not store a card on the user' do
+        begin
           service.call
         rescue StandardError
           nil
-        end.not_to(change { user.reload.public_metadata })
+        end
+
+        expect(Spl::Metafields.card_number(user)).to be_nil
+        expect(Spl::Metafields.card_active(user)).to be_nil
       end
     end
 
@@ -112,7 +113,8 @@ RSpec.describe Spl::RegisterAccountService do
 
     context 'when card number is provided and phone is nil' do
       before do
-        user.update!(phone: nil, public_metadata: user.public_metadata.merge('spl_no_card' => 'CARD123'))
+        user.update!(phone: nil)
+        Spl::Metafields.set_card_number(user, 'CARD123')
         allow(PhoneParserService).to receive(:new).with(nil).and_raise(StandardError, 'Phone missing')
       end
 

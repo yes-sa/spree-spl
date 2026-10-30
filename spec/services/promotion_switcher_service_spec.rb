@@ -5,13 +5,10 @@ require 'rails_helper'
 RSpec.describe PromotionSwitcherService, type: :service do
   let(:country) { create(:country) }
   let(:store) { create(:store, default_country: country) }
-  let(:order) do
-    create(
-      :order,
-      store:,
-      public_metadata: public_metadata
-    )
-  end
+  let(:order) { create(:order, store:) }
+
+  let(:card_number) { nil }
+  let(:card_active) { nil }
 
   let(:check_only) { true }
 
@@ -22,6 +19,11 @@ RSpec.describe PromotionSwitcherService, type: :service do
 
   let!(:line_item1) { create(:line_item, order:, variant: variant1, quantity: 1, price: 6.75) }
   let!(:line_item2) { create(:line_item, order:, variant: variant2, quantity: 3, price: 7.73) }
+
+  before do
+    Spl::Metafields.set_card_number(order, card_number)
+    Spl::Metafields.set_card_active(order, card_active)
+  end
 
   let(:example_sparta_response) do
     {
@@ -90,12 +92,8 @@ RSpec.describe PromotionSwitcherService, type: :service do
     let(:country) { create(:country) }
     let(:store) { create(:store, default_country: country) }
 
-    let(:public_metadata) do
-      {
-        'spl_card_active' => 'true',
-        'spl_no_card' => '5100179585157'
-      }
-    end
+    let(:card_number) { '5100179585157' }
+    let(:card_active) { true }
 
     it 'calls Sparta loyalty, gets response and applies Sparta discounts' do
       sparta_service_double = instance_double(Spl::SpartaLoyaltyService)
@@ -112,12 +110,8 @@ RSpec.describe PromotionSwitcherService, type: :service do
     end
 
     context 'when spl_card_active is true but Sparta returns nil' do
-      let(:public_metadata) do
-        {
-          'spl_card_active' => 'true',
-          'spl_no_card' => '5100179585157'
-        }
-      end
+      let(:card_number) { '5100179585157' }
+      let(:card_active) { true }
 
       it 'does not apply Sparta discounts (but still reloads the order)' do
         sparta_service_double = instance_double(Spl::SpartaLoyaltyService)
@@ -132,12 +126,8 @@ RSpec.describe PromotionSwitcherService, type: :service do
     end
 
     context 'when spl_card_active is false' do
-      let(:public_metadata) do
-        {
-          'spl_card_active' => 'false',
-          'spl_no_card' => '5100179585157'
-        }
-      end
+      let(:card_number) { '5100179585157' }
+      let(:card_active) { false }
 
       it 'calls Sparta with empty card number and does not apply discounts' do
         sparta_service_double = instance_double(Spl::SpartaLoyaltyService)
@@ -155,12 +145,8 @@ RSpec.describe PromotionSwitcherService, type: :service do
     end
 
     context 'when there are no line items' do
-      let(:public_metadata) do
-        {
-          'spl_card_active' => 'true',
-          'spl_no_card' => '5100179585157'
-        }
-      end
+      let(:card_number) { '5100179585157' }
+      let(:card_active) { true }
 
       before do
         order.line_items.destroy_all
@@ -175,11 +161,8 @@ RSpec.describe PromotionSwitcherService, type: :service do
     end
 
     context 'when spl_card_active is true but card number is missing' do
-      let(:public_metadata) do
-        {
-          'spl_card_active' => 'true'
-        }
-      end
+      let(:card_number) { nil }
+      let(:card_active) { true }
 
       it 'calls Sparta with nil card number and does not apply discounts' do
         sparta_service_double = instance_double(Spl::SpartaLoyaltyService)
@@ -197,7 +180,8 @@ RSpec.describe PromotionSwitcherService, type: :service do
     end
 
     context 'when spl_card_active is missing and card number is missing' do
-      let(:public_metadata) { {} }
+      let(:card_number) { nil }
+      let(:card_active) { nil }
 
       it 'calls Sparta with empty card number and does not apply discounts' do
         sparta_service_double = instance_double(Spl::SpartaLoyaltyService)
