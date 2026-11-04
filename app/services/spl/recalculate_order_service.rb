@@ -50,7 +50,10 @@ module Spl
         [line_item.id, line_item.variant_id, line_item.quantity, line_item.amount.to_d]
       end
 
-      card_state = @order.public_metadata.slice('spl_no_card', 'spl_card_active')
+      card_state = {
+        'card_number' => ::Spl::Metafields.card_number(@order),
+        'card_active' => ::Spl::Metafields.card_active(@order)
+      }
       coupon_version = @order.private_metadata['spl_coupon_version']
 
       Digest::SHA256.hexdigest([items, card_state, coupon_version].to_json)

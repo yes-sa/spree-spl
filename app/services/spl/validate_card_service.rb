@@ -16,17 +16,17 @@ module Spl
     end
 
     def call
-      return if @user&.public_metadata&.[]('spl_no_card').nil?
+      return if ::Spl::Metafields.card_number(@user).nil?
 
-      spl_card_active = @user.public_metadata['spl_card_active']
-      @user.public_metadata['spl_card_active'] = false
+      spl_card_active = ::Spl::Metafields.card_active(@user)
+      @card_active = false
 
       response_body = JSON.parse(verify_card_request)
       check_for_errors(response_body)
       update_user_after_check(spl_card_active)
       true
     rescue StandardError
-      @user.save
+      save_card_active
       raise
     end
 
@@ -89,7 +89,7 @@ module Spl
     end
 
     def cards_assigned_user(card_number)
-      ::Spree::User.find { |u| u.public_metadata&.dig('spl_no_card') == card_number }
+      ::Spl::Metafields.user_with_card_number(card_number)
     end
 
     def card_assigned_to_different_user(card_assignment)
@@ -97,14 +97,20 @@ module Spl
     end
 
     def user_have_different_card
-      return if @user&.public_metadata.blank?
+      card_number = ::Spl::Metafields.card_number(@user)
 
-      @user.public_metadata['spl_no_card'] && @user.public_metadata['spl_no_card'] != @card_number
+      card_number && card_number != @card_number
     end
 
     def update_user_after_check(spl_card_active)
-      @user.public_metadata['spl_card_active'] = spl_card_active.nil? || spl_card_active
-      @user.save if @user.changed?
+      @card_active = spl_card_active.nil? || spl_card_active
+      save_card_active
+    end
+
+    def save_card_active
+      return if @card_active.nil?
+
+      ::Spl::Metafields.set_card_active(@user, @card_active)
     end
   end
 end

@@ -9,7 +9,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
 
   let(:country) { create(:country) }
   let(:store) { create(:store, default_country: country) }
-  let!(:user) { create(:user, public_metadata: {}) }
+  let!(:user) { create(:user) }
 
   let(:terms_accepted) { 'true' }
   let(:phone_valid) { true }
@@ -31,7 +31,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
     allow(controller).to receive(:current_store).and_return(store)
     allow(controller).to receive(:try_spree_current_user).and_return(user)
     allow(controller).to receive(:login_code_params).and_return(
-      ActionController::Parameters.new(phone: phone_value, accept_yc_terms: terms_accepted).permit!
+      ActionController::Parameters.new(phone: phone_value, accept_spl_terms: terms_accepted).permit!
     )
     allow(controller).to receive(:phone_parser).and_return(phone_double)
     allow(controller).to receive(:turbo_stream).and_return(turbo_stream_helper)
@@ -101,7 +101,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
     end
 
     context 'when OTP is sent successfully' do
-      it 'calls OTP service, updates accept_yc_terms in public_metadata, and renders 200' do
+      it 'calls OTP service, records the terms consent, and renders 200' do
         service_instance = instance_double('Spl::SendOtpService')
 
         expect(Spl::SendOtpService).to receive(:new)
@@ -110,7 +110,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
         expect(service_instance).to receive(:call)
         expect(controller).to receive(:render).with(hash_including(status: :ok))
         controller.login_code
-        expect(user.reload.public_metadata['accept_yc_terms']).to eq(true)
+        expect(Spl::Metafields.accept_terms?(user.reload)).to be(true)
       end
     end
   end
@@ -189,7 +189,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
   describe '#registration_code (service + success/rescue)' do
     before do
       allow(controller).to receive(:params).and_return(
-        ActionController::Parameters.new(user: { phone: phone_value, accept_yc_terms: terms_accepted })
+        ActionController::Parameters.new(user: { phone: phone_value, accept_spl_terms: terms_accepted })
       )
     end
 
@@ -210,7 +210,7 @@ RSpec.describe Spree::Account::ProfileController, type: :controller do
         controller.registration_code
 
         expect(user.reload.phone).to eq(phone_value)
-        expect(user.public_metadata['accept_yc_terms']).to eq(true)
+        expect(Spl::Metafields.accept_terms?(user)).to be(true)
       end
     end
 

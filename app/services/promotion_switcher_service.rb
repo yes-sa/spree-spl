@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class PromotionSwitcherService
-  include BooleanHelper
-
   SPL_RATE_LIMIT_ERRORS = %w[
     TOO_MANY_TRANSACTION_UPDATES
     REQUEST_ALREADY_PROCESSED
@@ -62,7 +60,7 @@ class PromotionSwitcherService
   def apply_sparta_discount(order, check_only)
     return unless order.line_items.any?
 
-    card_number = prepare_card_number_if_exist(order.public_metadata)
+    card_number = prepare_card_number_if_exist(order)
     spl_response = Spl::SpartaLoyaltyService.new(
       spl_transaction_no(order),
       card_number,
@@ -81,12 +79,8 @@ class PromotionSwitcherService
     ApplySpartaDiscountService.new(spl_response, order).call
   end
 
-  # Safer card-active lookup (string/symbol keys). Missing card number stays nil (legacy).
-  def prepare_card_number_if_exist(metadata)
-    meta = metadata.to_h.stringify_keys
-    return '' unless cast_boolean(meta['spl_card_active'])
-
-    meta['spl_no_card']
+  def prepare_card_number_if_exist(order)
+    ::Spl::Metafields.card_active?(order) ? ::Spl::Metafields.card_number(order) : ''
   end
 
   # Falls back to order.token when no custom tx number is set (legacy-compatible).

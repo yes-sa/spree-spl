@@ -8,9 +8,9 @@ module Spl
           include BooleanHelper
 
           def create
-            add_spl_discount_params_to_order(current_user)
-
             super
+
+            add_spl_discount_params_to_order(current_user)
           end
 
           def show
@@ -23,13 +23,12 @@ module Spl
           def update_spl_card_activate
             find_cart!
 
-            if params.dig('public_metadata', 'spl_card_active').nil?
+            if params.dig('spl', 'card_active').nil?
               @cart.errors.add(:base, I18n.t('order.loyalty_card_missing'))
               render_errors(@cart.errors)
             else
-              active_param = cast_boolean(params.dig('public_metadata', 'spl_card_active'))
-              public_metadata = @cart.public_metadata
-              update_spl_card_active_param(@cart, active_param, public_metadata)
+              active_param = cast_boolean(params.dig('spl', 'card_active'))
+              update_spl_card_active_param(@cart, active_param)
               @cart.reload
               promotion_switcher(@cart, true)
 
@@ -47,48 +46,45 @@ module Spl
             order.promotions.any? && order.line_items.map { |li| li.adjustments.select { |a| a.preferred_external_source_type == 'SPL' } }.present?
           end
 
-          def update_spl_card_active_param(order, active_param, public_metadata)
-            order.update(public_metadata: public_metadata.merge('spl_card_active' => active_param))
+          def update_spl_card_active_param(order, active_param)
+            ::Spl::Metafields.set_card_active(order, active_param)
             order.promotions.destroy_all if order.promotions.any?
           end
 
           def add_spl_discount_params_to_order(user)
-            return if user&.public_metadata.blank?
-            return unless user.public_metadata.key?('spl_no_card') && user.public_metadata.key?('spl_card_active')
+            return unless ::Spl::Metafields.card_number?(user) && ::Spl::Metafields.card_active_set?(user)
 
-            spl_card_active = cast_boolean(user.public_metadata['spl_card_active'])
-            params[:public_metadata] ||= {}
-            params[:public_metadata].merge!(spl_card_active: spl_card_active,
-                                            spl_no_card: user.public_metadata['spl_no_card'])
+            order = @cart || find_cart
+            return if order.nil?
+
+            ::Spl::Metafields.set_card_active(order, ::Spl::Metafields.card_active?(user))
+            ::Spl::Metafields.set_card_number(order, ::Spl::Metafields.card_number(user))
           end
 
           def switch_spl_active_param(order, check_only)
-            return if user&.public_metadata.blank?
-            return unless order.public_metadata.key?('spl_card_active')
+            return if user.nil?
+            return unless ::Spl::Metafields.card_active_set?(order)
 
-            if order.public_metadata[:spl_card_active] == true
-              order.update(public_metadata: order.public_metadata.merge(spl_card_active: false))
+            if ::Spl::Metafields.card_active(order) == true
+              ::Spl::Metafields.set_card_active(order, false)
             else
-              order.update(public_metadata: order.public_metadata.merge(spl_card_active: true))
+              ::Spl::Metafields.set_card_active(order, true)
             end
 
             promotion_switcher(order, check_only)
           end
 
           def assign_spl_active_param(order, user)
-            return if user&.public_metadata.blank?
-            return unless user.public_metadata.key?(:spl_card_active)
+            return unless ::Spl::Metafields.card_active_set?(user)
 
-            active_param = cast_boolean(user.public_metadata[:spl_card_active])
-            spl_card = user.public_metadata[:spl_no_card]
-            order.update(public_metadata: order.public_metadata.merge(spl_card_active: active_param,
-                                                                      spl_no_card: spl_card))
+            ::Spl::Metafields.set_card_active(order, ::Spl::Metafields.card_active?(user))
+            ::Spl::Metafields.set_card_number(order, ::Spl::Metafields.card_number(user))
           end
 
           def maintain_spl_adjustments(order)
-            return unless order.public_metadata.key?(:spl_card_active)
+            return unless ::Spl::Metafields.card_active_set?(order)
 
-            order.update(public_metadata: order.public_metadata.merge(spl_card_active: true))
+            ::Spl::Metafields.set_card_active(order, true)
             promotion_switcher(order, true)
           end
         end
