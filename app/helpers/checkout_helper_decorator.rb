@@ -8,7 +8,7 @@ module CheckoutHelperDecorator
   end
 
   def promotion_name(adjustment)
-    if Spree::Spl.config.enhanced_discount_labels
+    if ::Spree::Spl.config.enhanced_discount_labels
       Spl::DiscountName.customer_label(
         adjustment.label,
         trade_agreement_number: adjustment.try(:preferred_trade_agreement_number)

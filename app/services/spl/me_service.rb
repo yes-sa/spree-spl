@@ -12,14 +12,15 @@ module Spl
     def initialize(user, store)
       @me_url = URI.parse(Spl::UrlCreatorService.new(store.private_metadata['spl_url']).me)
       @user = user
+      @store = store
       @env = Spl::StorePrivateMetadataService.all(store)
+      @retry_counter = 0
     end
 
     def call
       return unless @user.present? && @user.private_metadata.present?
       return unless logged_user?(@user)
 
-      retry_counter ||= 0
       response = send_request(@me_url, body)
       response_body = JSON.parse(response.body)
       Rails.logger.debug response_body
@@ -29,7 +30,7 @@ module Spl
     rescue SplMeError => e
       raise e unless token_refresh_needed(response_body, @retry_counter, @user, @store)
 
-      retry_counter += 1
+      @retry_counter += 1
       retry
     end
 

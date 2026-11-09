@@ -9,13 +9,16 @@ module SplServiceHelper
   # using customer oriented endpoints
   # @param [user: Spree::User]
   def refresh_user_token(user, store)
-    return if user.private_metadata.nil?
-    return if user.private_metadata['spl_refresh_token'].nil?
+    metadata = user.private_metadata&.stringify_keys
+    refresh_token = metadata&.dig('spl_refresh_token')
+    return if refresh_token.blank?
 
-    response = Spl::OauthTokenService.new(DateTime.current, store).refresh_token(user.private_metadata['spl_refresh_token'])
+    response = Spl::OauthTokenService.new(DateTime.current, store).refresh_token(refresh_token)
 
-    user.update!(private_metadata: { spl_access_token: response['access_token'],
-                                     spl_refresh_token: response['refresh_token'] })
+    user.update!(private_metadata: metadata.merge(
+      'spl_access_token' => response.fetch('accessToken'),
+      'spl_refresh_token' => response.fetch('refreshToken')
+    ))
   end
 
   def token_refresh_needed(response_body, retry_counter, user, store)
