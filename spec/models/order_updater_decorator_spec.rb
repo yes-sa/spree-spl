@@ -10,15 +10,13 @@ RSpec.describe Spree::OrderUpdater, type: :model do
       :order,
       store: store,
       payment_state: payment_state,
-      state: order_state,
-      public_metadata: public_metadata
+      state: order_state
     )
   end
   let(:adjustments) { [] }
 
   let(:payment_state)  { nil }
   let(:order_state)    { 'cart' }
-  let(:public_metadata) { {} }
 
   subject(:updater) { described_class.new(order) }
 

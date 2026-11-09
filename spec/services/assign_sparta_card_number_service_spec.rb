@@ -5,9 +5,7 @@ require 'rails_helper'
 RSpec.describe AssignSpartaCardNumberService, type: :service do
   let(:country) { create(:country) }
   let(:store) { create(:store, default_country: country) }
-  let(:user)  { create(:user, public_metadata: initial_public_metadata) }
-
-  let(:initial_public_metadata) { {} }
+  let(:user)  { create(:user) }
 
   let(:service) { described_class.new(user, store) }
 
@@ -47,13 +45,11 @@ RSpec.describe AssignSpartaCardNumberService, type: :service do
 
   describe '#call' do
     context 'when main card is active and belongs to the user' do
-      let(:initial_public_metadata) { { 'spl_no_card' => '5100179585157' } }
+      it 'assigns card number and marks card as active on metafields' do
+        service.call
 
-      it 'assigns card number and marks card as active in public_metadata' do
-        expect { service.call }
-          .to change { user.reload.public_metadata }
-          .from({ 'spl_no_card' => '5100179585157' })
-          .to({ 'spl_no_card' => '5100179585157', 'spl_card_active' => true })
+        expect(Spl::Metafields.card_number(user)).to eq('5100179585157')
+        expect(Spl::Metafields.card_active(user)).to be(true)
       end
     end
 
@@ -76,7 +72,7 @@ RSpec.describe AssignSpartaCardNumberService, type: :service do
 
     context 'when card belongs to a different user' do
       let!(:other_user) do
-        create(:user, public_metadata: { 'spl_no_card' => '5100179585157' })
+        create(:user).tap { |u| Spl::Metafields.set_card_number(u, '5100179585157') }
       end
 
       it 'raises AssignSpartaCardNumberError with wrong_owner message' do

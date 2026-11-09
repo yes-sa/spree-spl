@@ -11,6 +11,12 @@ module Spl
             base.before_action :validate_spl_no_card, only: :update
           end
 
+          def update
+            super
+
+            sync_spl_metafields if response.successful?
+          end
+
           def connect_loyalty_account
             authorize! :update, current_user
             assign_card_number(current_user, current_store, params)
@@ -51,17 +57,21 @@ module Spl
 
           private
 
+          def spl_card_params
+            params[:spl]
+          end
+
           def assign_card_number(user, store, params)
             Spl::LoginAccountService.new(user, store, params).call
             AssignSpartaCardNumberService.new(user, store).call
           end
 
           def validate_spl_no_card
-            return if permitted_params[:metadata].blank?
+            return if spl_card_params.blank?
             return if disactivated_card?
-            return if permitted_params.dig(:metadata, :spl_no_card).blank?
+            return if spl_card_params[:card_number].blank?
 
-            Spl::ValidateCardService.new(permitted_params.dig(:metadata, :spl_no_card),
+            Spl::ValidateCardService.new(spl_card_params[:card_number],
                                          current_user,
                                          current_store).call
           rescue Spl::ValidateCardService::SplCardValidationError => e
@@ -73,19 +83,21 @@ module Spl
             current_order = current_user.orders.last
             return unless %w[cart address delivery payment].include?(current_order.state)
 
-            current_order.update(
-              public_metadata: current_order.public_metadata.merge(
-                {
-                  'spl_no_card' => spl_card,
-                  'spl_card_active' => active
-                }
-              )
-            )
+            Spl::Metafields.set_card_number(current_order, spl_card)
+            Spl::Metafields.set_card_active(current_order, active)
+          end
+
+          def sync_spl_metafields
+            metadata = spl_card_params
+            return if metadata.nil?
+
+            Spl::Metafields.set_card_number(current_user, metadata[:card_number])
+            Spl::Metafields.set_card_active(current_user, metadata[:card_active])
+            Spl::Metafields.set_accept_terms(current_user, metadata[:accept_terms])
           end
 
           def disactivated_card?
-            !permitted_params.dig(:metadata, :spl_card_active).nil? &&
-              !permitted_params[:metadata][:spl_card_active]
+            !spl_card_params&.[](:card_active).nil? && !spl_card_params[:card_active]
           end
         end
       end
