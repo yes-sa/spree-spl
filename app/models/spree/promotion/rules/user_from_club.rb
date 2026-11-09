@@ -18,13 +18,13 @@ module Spree
         private
 
         def user_card_active?(order)
-          return false if order.user&.public_metadata.blank?
+          return false if order.user.nil?
 
-          order.user.public_metadata['spl_card_active'] == 'true'
+          ::Spl::Metafields.card_active(order.user) == true
         end
 
         def user_card_valid?(order)
-          ::Spl::ValidateCardService.new(order.user.public_metadata['spl_no_card'], order.user, order.store).call
+          ::Spl::ValidateCardService.new(::Spl::Metafields.card_number(order.user), order.user, order.store).call
         end
       end
     end

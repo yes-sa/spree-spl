@@ -9,7 +9,7 @@ module OrderUpdaterDecorator
   end
 
   def check_spl_adjustments
-    if order.public_metadata['spl_card_active'] == true
+    if ::Spl::Metafields.card_active(order) == true
       updated_any_adjustment = false
       order.adjustments.each do |adjustment|
         if adjustment.preferred_external_source_type != 'SPL' && adjustment.eligible?

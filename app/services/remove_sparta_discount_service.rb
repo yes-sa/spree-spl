@@ -12,6 +12,21 @@ class RemoveSpartaDiscountService
 
       adjustments.where('preferences LIKE ?', "%:external_source_type: #{SPL_SOURCE_TYPE}%").destroy_all
     end
+
+    return unless Spl::ShippingBasketLine.enabled?
+
+    order.shipments.each do |shipment|
+      destroy_shipment_spl_adjustments(shipment, order)
+    end
+  end
+
+  def self.destroy_shipment_spl_adjustments(shipment, order)
+    adjustments = shipment.adjustments.where('preferences LIKE ?', "%:external_source_type: #{SPL_SOURCE_TYPE}%")
+    return if adjustments.blank?
+
+    adjustments.destroy_all
+    ::Spree::Adjustable::AdjustmentsUpdater.update(shipment)
+    order.updater.update
   end
 
   def self.destroy_inactive_adjustments(adjustments, line_item, order)

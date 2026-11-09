@@ -6,14 +6,13 @@ RSpec.describe UpdateSpartaStateJob, type: :job do
   let!(:order) do
     create(
       :order,
-      state: 'complete',
-      public_metadata: { 'spl_no_card' => '1234567890123', 'spl_card_active' => true }
+      state: 'complete'
     )
   end
 
   let(:order_token)  { order.token }
   let(:order_number) { order.number }
-  let(:card_number)  { order.public_metadata['spl_no_card'] }
+  let(:card_number)  { '1234567890123' }
   let(:basket)       { [{ 'name' => 'Item', 'price' => 100 }] }
   let(:iso_date)     { DateTime.now.iso8601 }
 

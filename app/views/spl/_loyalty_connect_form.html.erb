@@ -21,16 +21,14 @@
         </div>
 
         <div class="mb-4 flex items-start gap-2">
-          <%= f.check_box :accept_yc_terms,
+          <%= f.check_box :accept_spl_terms,
                           {
                             class: 'mt-1',
-                            checked: ActiveModel::Type::Boolean.new.cast(
-                              try_spree_current_user&.public_metadata&.fetch('accept_yc_terms', false)
-                            )
+                            checked: Spl::Metafields.accept_terms?(try_spree_current_user)
                           },
                           'true',
                           'false' %>
-          <%= f.label :accept_yc_terms, I18n.t('spl.user.accept_yc_terms_label'), class: 'text-sm text-neutral-700' %>
+          <%= f.label :accept_spl_terms, I18n.t('spl.user.accept_yc_terms_label'), class: 'text-sm text-neutral-700' %>
         </div>
 
         <div>
@@ -50,16 +48,14 @@
         </div>
 
         <div class="mb-4 flex items-start gap-2">
-          <%= f.check_box :accept_yc_terms,
+          <%= f.check_box :accept_spl_terms,
                           {
                             class: 'mt-1',
-                            checked: ActiveModel::Type::Boolean.new.cast(
-                              try_spree_current_user&.public_metadata&.fetch('accept_yc_terms', false)
-                            )
+                            checked: Spl::Metafields.accept_terms?(try_spree_current_user)
                           },
                           'true',
                           'false' %>
-          <%= f.label :accept_yc_terms, I18n.t('spl.user.accept_yc_terms_label'), class: 'text-sm text-neutral-700' %>
+          <%= f.label :accept_spl_terms, I18n.t('spl.user.accept_yc_terms_label'), class: 'text-sm text-neutral-700' %>
         </div>
 
         <div><%= f.submit I18n.t('buttons.send_registration_code'), class: 'btn-primary w-full' %></div>

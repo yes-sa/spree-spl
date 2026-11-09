@@ -4,10 +4,8 @@ require 'rails_helper'
 
 RSpec.describe Spree::Api::V2::Storefront::CartController, type: :controller do
   let(:store) { Spree::Store.default || create(:store, default: true) }
-  let(:user)  { create(:user, public_metadata: user_metadata) }
-  let(:order) { create(:order, user: user, store: store, public_metadata: {}) }
-
-  let(:user_metadata) { {} }
+  let(:user)  { create(:user) }
+  let(:order) { create(:order, user: user, store: store) }
 
   before do
     allow(controller).to receive(:current_store).and_return(store)
@@ -17,29 +15,26 @@ RSpec.describe Spree::Api::V2::Storefront::CartController, type: :controller do
   end
 
   describe 'POST #create' do
-    context 'when user has SPL metadata' do
-      let(:user_metadata) do
-        {
-          'spl_no_card' => '0123456789123',
-          'spl_card_active' => true
-        }
+    context 'when the user has an SPL card' do
+      before do
+        Spl::Metafields.set_card_number(user, '0123456789123')
+        Spl::Metafields.set_card_active(user, true)
       end
 
-      it 'injects SPL params into request public_metadata' do
-        post :create, params: { public_metadata: {} }, as: :json
+      it 'copies the SPL card onto the cart' do
+        post :create, as: :json
 
-        expect(controller.params[:public_metadata].permit!.to_h).to include(
-          'spl_no_card' => '0123456789123',
-          'spl_card_active' => true
-        )
+        expect(Spl::Metafields.card_number(order)).to eq('0123456789123')
+        expect(Spl::Metafields.card_active(order)).to be(true)
       end
     end
 
-    context 'when user has no SPL metadata' do
-      it 'does not modify params' do
-        post :create, params: { public_metadata: {} }, as: :json
+    context 'when the user has no SPL card' do
+      it 'leaves the cart alone' do
+        post :create, as: :json
 
-        expect(controller.params[:public_metadata].permit!.to_h).to eq({})
+        expect(Spl::Metafields.card_number(order)).to be_nil
+        expect(Spl::Metafields.card_active(order)).to be_nil
       end
     end
   end
@@ -58,7 +53,7 @@ RSpec.describe Spree::Api::V2::Storefront::CartController, type: :controller do
     context 'when spl_card_active param is missing' do
       it 'adds an error and returns unprocessable_content' do
         patch :update_spl_card_activate,
-              params: { public_metadata: {} },
+              params: {},
               as: :json
 
         expect(response).to have_http_status(:unprocessable_content)
@@ -73,14 +68,14 @@ RSpec.describe Spree::Api::V2::Storefront::CartController, type: :controller do
         create(:promotion, orders: [order])
       end
 
-      it 'updates order metadata, clears promotions and runs promotion switcher' do
+      it 'updates the card metafield, clears promotions and runs promotion switcher' do
         patch :update_spl_card_activate,
-              params: { public_metadata: { spl_card_active: 'false' } },
+              params: { spl: { card_active: 'false' } },
               as: :json
 
         order.reload
 
-        expect(order.public_metadata['spl_card_active']).to eq(false)
+        expect(Spl::Metafields.card_active(order)).to be(false)
         expect(order.promotions).to be_empty
         expect(PromotionSwitcherService)
           .to have_received(:new).with(order, true)

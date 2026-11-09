@@ -3,13 +3,21 @@
 module Spl
   module Spree
     module Storefront
-      module CheckoutControllerDecorator
+      module CheckoutControllerDecorator # rubocop:disable Metrics/ModuleLength
         include ErrorHandlingHelper
         include BooleanHelper
 
+        DISCOUNT_CODE_ACTIONS = %i[apply_discount_code remove_discount_code].freeze
+        LOYALTY_COUPON_ACTIONS = %i[activate_coupon deactivate_coupon].freeze
+
         def self.prepended(base)
-          base.before_action :promotion_switcher
-          base.before_action :load_user_coupons, except: %i[activate_coupon deactivate_coupon]
+          # Typed discount-code actions always recalculate themselves.
+          # When reprice_on_coupon_change is on, VC activate/deactivate also reprice after
+          # the CWP call — skip the before_action sale. That before_action uses
+          # checkOnly=false (path ends with activate_coupon), which can lock a pending
+          # SPL tx without the newly activated coupon and wipe discounts.
+          base.before_action :promotion_switcher, unless: :skip_promotion_switcher?
+          base.before_action :load_user_coupons, except: (LOYALTY_COUPON_ACTIONS + DISCOUNT_CODE_ACTIONS)
           base.after_action :perform_update_sparta_state_job, only: %i[confirm complete]
         end
 
@@ -29,7 +37,46 @@ module Spl
           end
         end
 
+        def apply_discount_code
+          return head :not_found unless ::Spree::Spl.config.manual_discount_codes?
+
+          @discount_code_result = ::Spl::ManualCoupons::ApplyService.new(
+            @order,
+            params[:discount_code].presence || params[:coupon_code],
+            user: @order.user,
+            store: current_store
+          ).call
+          load_cart_line_items_for_discount_response
+        ensure
+          respond_to_discount_code_change if ::Spree::Spl.config.manual_discount_codes?
+        end
+
+        def remove_discount_code
+          return head :not_found unless ::Spree::Spl.config.manual_discount_codes?
+
+          @discount_code_result = ::Spl::ManualCoupons::RemoveService.new(
+            @order,
+            params[:discount_code].presence || params[:coupon_code],
+            user: @order.user,
+            store: current_store
+          ).call
+          load_cart_line_items_for_discount_response
+        ensure
+          respond_to_discount_code_change if ::Spree::Spl.config.manual_discount_codes?
+        end
+
         private
+
+        def load_cart_line_items_for_discount_response
+          # Host apps may override to eager-load line items for turbo streams.
+        end
+
+        def respond_to_discount_code_change
+          respond_to do |format|
+            format.turbo_stream
+            format.html { redirect_to checkout_path }
+          end
+        end
 
         def activate_coupon_legacy
           ::Spl::Coupons::ActivateCouponService.new(@order.user, @order.store, params[:coupon_code]).call
@@ -107,12 +154,25 @@ module Spl
           end
         end
 
+        def skip_promotion_switcher?
+          action = action_name.to_sym
+          return true if action == :complete
+          return true if DISCOUNT_CODE_ACTIONS.include?(action)
+          return true if LOYALTY_COUPON_ACTIONS.include?(action) && ::Spree::Spl.config.reprice_on_coupon_change
+
+          false
+        end
+
         def promotion_switcher
           PromotionSwitcherService.new(@order, checkout_state_allowed?).call
         end
 
         def checkout_state_allowed?
-          %w[cart address delivery payment].include?(request.path.split('/').last)
+          !final_confirm_submission?
+        end
+
+        def final_confirm_submission?
+          action_name == 'update' && params[:state].to_s == 'confirm' && @order&.confirm?
         end
 
         def perform_update_sparta_state_job

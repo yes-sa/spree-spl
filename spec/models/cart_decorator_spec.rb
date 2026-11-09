@@ -13,97 +13,54 @@ RSpec.describe Spree::Cart, type: :model do
   end
 
   let(:instance) { klass.new }
-  let(:order) { create(:order, public_metadata: public_metadata) }
+  let(:order) { create(:order) }
+  let(:card_number) { nil }
+  let(:card_active) { nil }
 
-  before { instance.order = order }
+  before do
+    Spl::Metafields.set_card_number(order, card_number)
+    Spl::Metafields.set_card_active(order, card_active)
+    instance.order = order
+  end
 
   describe '#order_spl? (private)' do
-    context 'when metadata is empty' do
-      let(:public_metadata) { {} }
+    context 'when nothing is stored' do
+      it 'returns false' do
+        expect(instance.send(:order_spl?)).to be(false)
+      end
+    end
+
+    context 'when the card number is missing' do
+      let(:card_active) { true }
 
       it 'returns false' do
-        expect(instance.send(:order_spl?)).to eq(false)
+        expect(instance.send(:order_spl?)).to be(false)
       end
     end
 
-    context 'when spl_no_card is missing' do
-      let(:public_metadata) { { spl_card_active: true } }
+    context 'when the card state is missing' do
+      let(:card_number) { '0123456789123' }
 
       it 'returns false' do
-        expect(instance.send(:order_spl?)).to eq(false)
+        expect(instance.send(:order_spl?)).to be(false)
       end
     end
 
-    context 'when spl_card_active is missing' do
-      let(:public_metadata) { { spl_no_card: '0123456789123' } }
+    context 'when both are stored and the card is active' do
+      let(:card_number) { '0123456789123' }
+      let(:card_active) { true }
 
-      it 'returns false' do
-        expect(instance.send(:order_spl?)).to eq(false)
+      it 'returns the stored card state' do
+        expect(instance.send(:order_spl?)).to be(true)
       end
     end
 
-    context 'when both keys exist as symbol keys' do
-      let(:public_metadata) do
-        {
-          spl_no_card: '0123456789123',
-          spl_card_active: true
-        }
-      end
+    context 'when the card is inactive' do
+      let(:card_number) { '0123456789123' }
+      let(:card_active) { false }
 
-      it 'returns the spl_card_active value' do
-        expect(instance.send(:order_spl?)).to eq(true)
-      end
-    end
-
-    context 'when both keys exist as string keys' do
-      let(:public_metadata) do
-        {
-          'spl_no_card' => '0123456789123',
-          'spl_card_active' => true
-        }
-      end
-
-      it 'returns the spl_card_active value' do
-        expect(instance.send(:order_spl?)).to eq(true)
-      end
-    end
-
-    context 'when keys are mixed' do
-      let(:public_metadata) do
-        {
-          'spl_no_card' => '0123456789123',
-          spl_card_active: false
-        }
-      end
-
-      it 'returns the spl_card_active value' do
-        expect(instance.send(:order_spl?)).to eq(false)
-      end
-    end
-
-    context 'when spl_card_active is false' do
-      let(:public_metadata) do
-        {
-          spl_no_card: '0123456789123',
-          spl_card_active: false
-        }
-      end
-
-      it 'returns false' do
-        expect(instance.send(:order_spl?)).to eq(false)
-      end
-    end
-
-    context 'when spl_card_active is a truthy string' do
-      let(:public_metadata) do
-        {
-          'spl_no_card' => '0123456789123',
-          'spl_card_active' => 'true'
-        }
-      end
-
-      it 'returns the raw value (string) as-is' do
-        expect(instance.send(:order_spl?)).to eq('true')
+      it 'returns the stored card state' do
+        expect(instance.send(:order_spl?)).to be(false)
       end
     end
   end
